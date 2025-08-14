@@ -1,0 +1,34 @@
+Package: vibeCheck
+Type: Package
+Title: Interactive R Package Documentation Assistant
+Version: 0.1.0
+Authors@R: c(
+    person("Li", "Richard Zehang", email = "lizehang@gmail.com", role = c("aut", "cre"))
+    )
+Description: An interactive Shiny application for analyzing R package documentation,
+    dependencies, and generating roxygen2 documentation templates. Provides comprehensive dependency analysis, missing package detection, and smart parameter suggestions based on existing documentation patterns. The package is created with vibe coding using Claude.
+License: GPL (>= 2)
+URL: https://github.com/richardli/vibeCheck
+BugReports: https://github.com/richardli/vibeCheck/issues
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE, r6 = FALSE)
+RoxygenNote: 7.3.2
+Depends: 
+    R (>= 4.0.0)
+Imports:
+    shiny (>= 1.7.0),
+    shinydashboard,
+    shinyAce,
+    DT,
+    stringr,
+    purrr,
+    R6,
+    utils,
+    tools
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown,
+    devtools
+VignetteBuilder: knitr
