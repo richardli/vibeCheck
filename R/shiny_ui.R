@@ -26,7 +26,7 @@ create_doc_ui <- function() {
     ),
     
     shinydashboard::dashboardBody(
-      shiny::tags$head(
+      shiny::tags$utils::head(
         shiny::tags$style(shiny::HTML("
           .ace_editor { font-size: 12px !important; }
           .content-wrapper, .right-side { background-color: #f4f4f4; }

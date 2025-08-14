@@ -40,7 +40,7 @@ launch_doc_app <- function(package_path = ".", port = NULL, host = "127.0.0.1", 
   
   if (length(missing_packages) > 0) {
     stop("Missing required packages: ", paste(missing_packages, collapse = ", "), 
-         "\nPlease install them with: install.packages(c(", 
+         "\nPlease install them with: utils::install.packages(c(", 
          paste(paste0("'", missing_packages, "'"), collapse = ", "), "))")
   }
   
@@ -116,7 +116,7 @@ check_r_files <- function(path = ".") {
       
       if (length(r_files) > 0) {
         cat("  Files:\n")
-        for (f in head(r_files, 10)) {  # Show first 10 files
+        for (f in utils::head(r_files, 10)) {  # Show first 10 files
           cat("    -", basename(f), "\n")
         }
         if (length(r_files) > 10) cat("    ... and", length(r_files) - 10, "more\n")

@@ -61,11 +61,11 @@ create_doc_server <- function() {
         Dependencies = sapply(data$dependencies, function(x) {
           all_deps <- unique(c(x$library_calls, x$require_calls, x$namespace_calls, x$suspected_packages))
           if (length(all_deps) == 0) return("None")
-          return(paste(head(all_deps, 3), collapse = ", "))
+          return(paste(utils::head(all_deps, 3), collapse = ", "))
         }),
         Missing = sapply(data$missing_deps, function(x) {
           if (length(x) == 0) return("None")
-          return(paste(head(x, 3), collapse = ", "))
+          return(paste(utils::head(x, 3), collapse = ", "))
         }),
         stringsAsFactors = FALSE
       )
