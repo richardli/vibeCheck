@@ -14,19 +14,22 @@ _Disclaimer:_ **The package is completely created with vibe coding using Claude*
 ✅ **Missing package detection and installation**  
 ✅ **DESCRIPTION file analysis**  
 ✅ **Direct saving to R source files**  
+✅ **Automatic namespace conversion** using package dependencies  
+✅ **Global variable binding fixes** from R CMD check output  
 
 ## Installation
 
-You can install the development version of rdochelper from [GitHub](https://github.com/) with:
+You can install the development version of vibeCheck from [GitHub](https://github.com/) with:
 
-```r
+```
 # install.packages("devtools")
 devtools::install_github("richardli/vibeCheck")
 ```
 
 ## Quick Start
+You can launch a package function dashboard at
 
-```r
+```
 library(vibeCheck)
 
 # Launch the app for current directory
@@ -34,128 +37,75 @@ launch_doc_app()
 
 # Launch the app for a specific package
 launch_doc_app("/path/to/your/package")
-
-# Launch on a specific port
-launch_doc_app(port = 3838)
-
-# Check R files diagnostic (without launching app)
-check_r_files("/path/to/package")
 ```
 
-## Main Components
+Or from the command line only, without launching app
+
+```
+check_r_files("/path/to/package")
+```
+ 
+
+ 
+## Some fun stuff
 
 ### DocumentationHelper Class
 
 The core functionality is provided by the `DocumentationHelper` R6 class:
 
-```r
+```
 # Create a documentation helper
 helper <- DocumentationHelper$new("/path/to/package")
-
-# Generate documentation template
-template <- helper$generate_template("my_function", list(x = NULL, y = "default"))
-
-# Access function data
-functions_data <- helper$functions_data
-dependencies <- helper$dependencies
-missing_packages <- helper$missing_deps
 ```
 
-### Shiny Interface
 
-The package provides a comprehensive Shiny interface with three main tabs:
+### Global Variable Fixes
 
-1. **Functions Tab**: Browse functions, edit documentation, view suggestions
-2. **Dependencies Tab**: Analyze package dependencies and missing packages  
-3. **Settings Tab**: View package statistics and parameter history
+Automatically deal "no visible binding for global variable" errors from R CMD check. Note that this is not a "fix", it is a hack to avoid R check to complain about it only. So only use this if there is a valid reason to do so!
 
-## Dependency Analysis Features
-
-`rdochelper` provides sophisticated dependency analysis including:
-
-- **Library/Require calls**: `library(package)` and `require(package)`
-- **Namespace calls**: `package::function()`
-- **Roxygen imports**: `@import` and `@importFrom` tags
-- **Pattern-based detection**: Recognizes common function patterns from popular packages
-- **DESCRIPTION file comparison**: Finds undeclared and unused dependencies
-- **Missing package detection**: Identifies packages that need to be installed
-
-## Documentation Features
-
-- **Template generation**: Creates roxygen2 documentation templates
-- **Parameter suggestions**: Uses existing parameter documentation to suggest descriptions
-- **Live editing**: Edit documentation directly in the interface
-- **File saving**: Save changes directly back to R source files
-- **Pattern recognition**: Learns from existing documentation patterns
-
-## Examples
-
-### Basic Usage
-
-```r
-library(rdochelper)
-
-# Quick diagnostic of current directory
-check_r_files()
-
-# Launch full interface
-launch_doc_app()
 ```
+# Copy R CMD check output that shows global variable errors
+check_output <- "
+checking R code for possible problems ... NOTE
+  my_function: no visible binding for global variable 'variable_name'
+  other_function: no visible binding for global variable 'another_var'
+"
 
-### Programmatic Access
+# Preview what variables would be added to globalVariables()
+fix_global_variables(check_output, preview_only = TRUE)
 
-```r
-# Create helper for a package
+# Apply the fix (creates or updates R/check_global.R)
+fix_global_variables(check_output)
+
+# Using with DocumentationHelper
 helper <- DocumentationHelper$new(".")
+result <- helper$fix_global_variables(check_output)
 
-# View all functions found
-print(helper$functions_data)
-
-# Check dependencies
-print(helper$dependencies)
-
-# Generate template for a specific function
-args <- list(data = NULL, method = "default", verbose = TRUE)
-template <- helper$generate_template("analyze_data", args)
-cat(template)
+# Interactive mode - prompts you to paste check output
+fix_global_variables_interactive()
 ```
 
-### Dependency Analysis
 
-```r
-helper <- DocumentationHelper$new("/path/to/package")
+### Namespace Conversion
 
-# View missing packages
-print(helper$missing_deps)
+Automatically convert function calls to use explicit namespace notation:
 
-# View all detected dependencies
-all_deps <- unique(c(
-  helper$dependencies$library_calls,
-  helper$dependencies$namespace_calls,
-  helper$dependencies$suspected_packages
-))
-print(all_deps)
+```
+# Analyze what functions could be namespaced (from your DESCRIPTION imports)
+analysis <- helper$analyze_namespace_opportunities()
+cat(analysis$summary)
+
+# Preview what would be converted
+results <- helper$auto_namespace_conversion(preview_only = TRUE)
+
+# Apply namespace conversion with backup
+results <- helper$auto_namespace_conversion(backup = TRUE)
+
+# Exclude certain functions from conversion
+results <- helper$auto_namespace_conversion(
+  exclude_functions = c("filter", "select"), 
+  backup = TRUE
+)
 ```
 
-## Package Structure Analysis
-
-The package can analyze various R project structures:
-
-- **Standard R packages**: With `R/`, `DESCRIPTION`, `NAMESPACE`
-- **Script collections**: R files in any directory
-- **Mixed projects**: R files in `src/`, `scripts/`, or root directory
-
-## Supported Patterns
-
-The dependency detection recognizes patterns from popular packages including:
-
-- **tidyverse**: ggplot2, dplyr, tidyr, stringr, purrr, readr
-- **Shiny ecosystem**: shiny, shinydashboard, DT, plotly
-- **Data manipulation**: data.table, lubridate
-- **Development tools**: devtools, testthat, knitr, rmarkdown
-- **And many more...**
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
+ 

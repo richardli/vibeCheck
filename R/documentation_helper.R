@@ -528,13 +528,10 @@ DocumentationHelper <- R6::R6Class("DocumentationHelper",
     
     # Analyze namespace conversion opportunities
     analyze_namespace_opportunities = function() {
-      
-      # Get function mappings from DESCRIPTION
       tryCatch({
         if (exists("build_mappings_from_description", mode = "function")) {
           mappings <- build_mappings_from_description(self$package_path, verbose = FALSE)
         } else {
-          # Fallback: simple DESCRIPTION parsing
           mappings <- self$simple_build_mappings_from_description()
         }
       }, error = function(e) {
@@ -606,7 +603,6 @@ DocumentationHelper <- R6::R6Class("DocumentationHelper",
       desc_content <- readLines(desc_file, warn = FALSE)
       desc_text <- paste(desc_content, collapse = "\n")
       
-      # Extract Imports
       imports_match <- stringr::str_match(desc_text, "Imports:\\s*([^\\n]*(?:\\n\\s+[^\\n]*)*)")
       target_packages <- c()
       
@@ -671,200 +667,6 @@ DocumentationHelper <- R6::R6Class("DocumentationHelper",
       }
       
       return(opportunities)
-    },
-    
-    # Auto-convert function calls to namespace format
-    auto_namespace_conversion = function(target_files = NULL, 
-                                       backup = TRUE, 
-                                       preview_only = FALSE,
-                                       custom_mappings = NULL,
-                                       exclude_functions = c(),
-                                       include_suggests = FALSE) {
-      
-      # Build function mappings from DESCRIPTION file
-      tryCatch({
-        if (exists("build_mappings_from_description", mode = "function")) {
-          func_to_package <- build_mappings_from_description(
-            package_path = self$package_path,
-            include_suggests = include_suggests,
-            custom_mappings = custom_mappings,
-            verbose = preview_only
-          )
-        } else {
-          # Fallback to simple method
-          func_to_package <- self$simple_build_mappings_from_description()
-          if (!is.null(custom_mappings)) {
-            func_to_package <- c(func_to_package, custom_mappings)
-          }
-        }
-      }, error = function(e) {
-        stop("Could not build function mappings from DESCRIPTION file: ", e$message)
-      })
-      
-      if (length(func_to_package) == 0) {
-        message("No function mappings found. Check your DESCRIPTION file dependencies.")
-        return(list())
-      }
-      
-      # If no specific files provided, use all files from functions_data
-      if (is.null(target_files)) {
-        if (is.null(self$functions_data) || nrow(self$functions_data) == 0) {
-          stop("No functions data available. Run scan_package() first.")
-        }
-        target_files <- unique(self$functions_data$file_path)
-      }
-      
-      # Process each file
-      conversion_results <- list()
-      
-      for (file_path in target_files) {
-        if (!file.exists(file_path)) {
-          warning("File not found: ", file_path)
-          next
-        }
-        
-        message("Converting: ", file_path)
-        result <- self$convert_file_namespaces(
-          file_path = file_path,
-          func_to_package = func_to_package,
-          backup = backup,
-          preview_only = preview_only,
-          exclude_functions = exclude_functions
-        )
-        
-        conversion_results[[file_path]] <- result
-      }
-      
-      # If changes were made and not preview only, rescan the package
-      if (!preview_only && any(sapply(conversion_results, function(x) x$lines_modified > 0))) {
-        message("Rescanning package after namespace conversion...")
-        self$scan_package()
-        self$scan_dependencies()
-      }
-      
-      return(conversion_results)
-    },
-    
-    # Convert a single file's function calls to namespace format
-    convert_file_namespaces = function(file_path, func_to_package, backup, preview_only, exclude_functions) {
-      
-      # Read the file
-      original_content <- readLines(file_path, warn = FALSE)
-      modified_content <- original_content
-      
-      # Track changes
-      changes <- list()
-      
-      # Process each line
-      for (i in seq_along(modified_content)) {
-        line <- modified_content[i]
-        
-        # Skip comments and strings (basic detection)
-        if (self$is_comment_or_string_line(line)) {
-          next
-        }
-        
-        # Find function calls that need namespacing
-        line_changes <- self$process_line_for_namespacing(line, func_to_package, exclude_functions)
-        
-        if (length(line_changes$modified_line) > 0 && line_changes$modified_line != line) {
-          modified_content[i] <- line_changes$modified_line
-          
-          # Record the change
-          changes[[length(changes) + 1]] <- list(
-            line_number = i,
-            original = line,
-            modified = line_changes$modified_line,
-            functions_changed = line_changes$functions_changed
-          )
-        }
-      }
-      
-      # Results summary
-      results <- list(
-        file_path = file_path,
-        total_lines = length(original_content),
-        lines_modified = length(changes),
-        changes = changes,
-        functions_converted = unique(unlist(lapply(changes, function(x) x$functions_changed))),
-        preview_only = preview_only
-      )
-      
-      # Apply changes if not preview only
-      if (!preview_only && length(changes) > 0) {
-        # Create backup if requested
-        if (backup) {
-          backup_path <- paste0(file_path, ".backup.", format(Sys.time(), "%Y%m%d_%H%M%S"))
-          file.copy(file_path, backup_path)
-          results$backup_path <- backup_path
-          message("Backup created: ", backup_path)
-        }
-        
-        # Write modified content
-        writeLines(modified_content, file_path)
-        message("File modified: ", file_path)
-        message("Lines changed: ", length(changes))
-      }
-      
-      return(results)
-    },
-    
-    # Check if a line is primarily a comment or string
-    is_comment_or_string_line = function(line) {
-      trimmed <- trimws(line)
-      
-      # Skip empty lines
-      if (nchar(trimmed) == 0) return(TRUE)
-      
-      # Skip comment lines (basic detection)
-      if (startsWith(trimmed, "#")) return(TRUE)
-      
-      # Skip roxygen lines
-      if (startsWith(trimmed, "#'")) return(TRUE)
-      
-      return(FALSE)
-    },
-    
-    # Process a single line for namespace conversion
-    process_line_for_namespacing = function(line, func_to_package, exclude_functions) {
-      
-      modified_line <- line
-      functions_changed <- c()
-      
-      # Find function calls using regex
-      for (func_name in names(func_to_package)) {
-        
-        # Skip if function is in exclude list
-        if (func_name %in% exclude_functions) next
-        
-        package_name <- func_to_package[[func_name]]
-        
-        # Escape special regex characters in function name
-        escaped_func <- gsub("([\\[\\]\\(\\)\\{\\}\\^\\$\\*\\+\\?\\|\\\\\\.])", "\\\\\\1", func_name)
-        
-        # Pattern to match function calls that don't already have namespace
-        pattern <- paste0("(?<!::)\\b", escaped_func, "\\s*\\(")
-        
-        # Check if pattern exists in line using perl=TRUE for lookbehind
-        if (grepl(pattern, line, perl = TRUE)) {
-          
-          # Replace with namespaced version
-          replacement <- paste0(package_name, "::", func_name, "(")
-          # Use a simpler pattern for replacement
-          simple_pattern <- paste0("\\b", escaped_func, "\\s*\\(")
-          
-          # Only replace if not already namespaced
-          if (!grepl(paste0(package_name, "::", escaped_func), line)) {
-            modified_line <- gsub(simple_pattern, replacement, modified_line)
-            functions_changed <- c(functions_changed, func_name)
-          }
-        }
-      }
-      
-      return(list(
-        modified_line = modified_line,
-        functions_changed = unique(functions_changed)
-      ))
     }
   )
 )
