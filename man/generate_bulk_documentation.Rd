@@ -10,7 +10,8 @@ generate_bulk_documentation(
   template_type = "exported",
   save_to_files = FALSE,
   backup = TRUE,
-  exported_only = TRUE
+  exported_only = TRUE,
+  example_template = NULL
 )
 }
 \arguments{
@@ -24,7 +25,9 @@ generate_bulk_documentation(
 
 \item{backup}{Logical. Create backups when saving (default: TRUE)}
 
-\item{exported_only}{Logical. Only document functions that have @export or are intended for export (default: TRUE)}
+\item{exported_only}{Logical. Only document functions that are exported in NAMESPACE (default: TRUE)}
+
+\item{example_template}{Character. Custom example template with \link{FUNCNAME} placeholder (optional)}
 }
 \value{
 List with generated documentation for each function
@@ -41,10 +44,12 @@ docs <- generate_bulk_documentation(pkg_info)
 # Include all functions (internal and exported)
 docs <- generate_bulk_documentation(pkg_info, exported_only = FALSE)
 
-# Generate and save for specific functions
+# Generate and save for specific functions with custom examples
+template <- "dhsData <- getDHSdata(country = \"Zambia\", indicator = \"[FUNCNAME]\", year = 2018)"
 docs <- generate_bulk_documentation(pkg_info, 
                                    functions = c("func1", "func2"),
-                                   save_to_files = TRUE)
+                                   save_to_files = TRUE,
+                                   example_template = template)
 }
 
 }

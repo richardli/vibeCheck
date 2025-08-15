@@ -2,8 +2,10 @@
 % Please edit documentation in R/package_analysis.r
 \name{extract_function_docs}
 \alias{extract_function_docs}
-\title{Extract Function Documentation from File}
+\title{Extract Function Documentation from File (Fixed)}
 \usage{
+extract_function_docs(file_path, start_pos)
+
 extract_function_docs(file_path, start_pos)
 }
 \arguments{
@@ -13,7 +15,11 @@ extract_function_docs(file_path, start_pos)
 }
 \value{
 Character. Documentation string
+
+Character. Documentation string
 }
 \description{
+Extract Function Documentation from File (Fixed)
+
 Extract Function Documentation from File
 }

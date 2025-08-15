@@ -4,12 +4,12 @@
 \alias{analyze_package}
 \title{Analyze R Package Structure and Functions}
 \usage{
-analyze_package(path = ".", include_dependencies = TRUE, verbose = TRUE)
+analyze_package(path = ".", include_dependencies = FALSE, verbose = TRUE)
 }
 \arguments{
 \item{path}{Character. Path to package directory (default: ".")}
 
-\item{include_dependencies}{Logical. Whether to analyze dependencies (default: TRUE)}
+\item{include_dependencies}{Logical. Whether to analyze dependencies (default: FALSE)}
 
 \item{verbose}{Logical. Print progress messages (default: TRUE)}
 }
@@ -19,6 +19,7 @@ List with package analysis results
 \description{
 Main function to analyze an R package, extracting functions, documentation,
 dependencies, and other metadata. Returns a simple list structure.
+Updated to handle both .R and .r file extensions.
 }
 \examples{
 \dontrun{

@@ -1,7 +1,7 @@
-#' Create the Shiny Server for Documentation Assistant (Functional Version)
+#' Create the Shiny Server for Documentation Assistant (Updated)
 #'
 #' Creates the server logic for the R Documentation Assistant Shiny application
-#' using the new functional architecture instead of R6 classes.
+#' with proper integration of enhanced dependency analysis.
 #'
 #' @return Shiny server function
 #' @export
@@ -17,131 +17,266 @@ create_doc_server <- function() {
       package_path = "."
     )
     
-    # Load package on startup
+    # Load package on startup with better error handling
     shiny::observe({
       tryCatch({
+        message("Loading package analysis for: ", values$package_path)
+        
+        # Use enhanced analysis
         values$package_data <- analyze_package(values$package_path, verbose = FALSE)
+        
+        # Ensure we have enhanced dependency data
         if (!is.null(values$package_data$dependencies)) {
           values$dependency_data <- values$package_data$dependencies
+        } else {
+          # Fallback: run enhanced dependency analysis separately
+          message("Running enhanced dependency analysis...")
+          values$dependency_data <- analyze_package_dependencies(
+            values$package_path, 
+            values$package_data$functions, 
+            verbose = FALSE
+          )
+          # Add it back to package_data
+          values$package_data$dependencies <- values$dependency_data
         }
+        
+        # Namespace analysis
         values$namespace_analysis <- analyze_namespace_usage(values$package_path, verbose = FALSE)
+        
+        message("Package analysis completed successfully")
+        
       }, error = function(e) {
+        message("Error loading package: ", e$message)
         shiny::showNotification(paste("Error loading package:", e$message), type = "error")
+        
+        # Try basic fallback
+        tryCatch({
+          message("Attempting basic fallback analysis...")
+          functions_data <- scan_r_functions(values$package_path, verbose = FALSE)
+          docs_data <- parse_function_docs(functions_data)
+          param_history <- build_parameter_history(docs_data)
+          
+          values$package_data <- list(
+            package_path = values$package_path,
+            functions = functions_data,
+            documentation = docs_data,
+            parameter_history = param_history,
+            stats = list(
+              total_functions = nrow(functions_data),
+              documented_functions = sum(docs_data$has_docs, na.rm = TRUE),
+              total_files = length(unique(functions_data$file_path))
+            )
+          )
+          
+          message("Basic analysis completed")
+        }, error = function(e2) {
+          message("Fallback analysis also failed: ", e2$message)
+        })
       })
     })
     
     # Reload package when button is clicked
     shiny::observeEvent(input$reload_package, {
+      old_path <- values$package_path
       values$package_path <- input$package_path
+      
+      message("Reloading package. Old path: ", old_path, ", New path: ", values$package_path)
       
       tryCatch({
         shiny::withProgress(message = "Analyzing package...", {
+          shiny::incProgress(0.1, detail = "Checking package structure")
+          
+          # Validate package path
+          if (!dir.exists(values$package_path)) {
+            stop("Directory does not exist: ", values$package_path)
+          }
+          
           shiny::incProgress(0.2, detail = "Scanning functions")
           values$package_data <- analyze_package(values$package_path, verbose = FALSE)
           
-          shiny::incProgress(0.4, detail = "Analyzing dependencies")
+          shiny::incProgress(0.4, detail = "Analyzing dependencies") 
           if (!is.null(values$package_data$dependencies)) {
             values$dependency_data <- values$package_data$dependencies
+          } else {
+            values$dependency_data <- analyze_package_dependencies(
+              values$package_path, 
+              values$package_data$functions, 
+              verbose = FALSE
+            )
+            values$package_data$dependencies <- values$dependency_data
           }
           
           shiny::incProgress(0.2, detail = "Checking namespace opportunities")
           values$namespace_analysis <- analyze_namespace_usage(values$package_path, verbose = FALSE)
+          
+          shiny::incProgress(0.2, detail = "Finalizing")
         })
         
         shiny::showNotification("Package reloaded successfully!", type = "success")
+        
+        # Debug output
+        if (!is.null(values$package_data)) {
+          message("Functions found: ", nrow(values$package_data$functions))
+          message("Files found: ", length(unique(values$package_data$functions$file_path)))
+        }
+        
       }, error = function(e) {
+        message("Error during reload: ", e$message)
         shiny::showNotification(paste("Error loading package:", e$message), type = "error")
+        
+        # Show diagnostic information
+        check_r_files(values$package_path)
       })
     })
     
-    # Package summary output
+    # Package summary output with better error handling
     output$package_summary <- shiny::renderText({
-      if (is.null(values$package_data)) return("No package loaded")
-      
-      stats <- values$package_data$stats
-      missing_count <- if (!is.null(values$dependency_data)) length(values$dependency_data$missing) else 0
-      
-      paste(
-        "Functions found:", stats$total_functions, "\n",
-        "Documented:", stats$documented_functions, "\n", 
-        "Undocumented:", stats$total_functions - stats$documented_functions, "\n",
-        "Files:", stats$total_files, "\n",
-        "Missing packages:", missing_count
-      )
-    })
-    
-    # Functions table
-    output$functions_table <- DT::renderDataTable({
-      if (is.null(values$package_data)) return(data.frame())
-      
-      func_data <- values$package_data$functions
-      docs_data <- values$package_data$documentation
-      
-      if (nrow(func_data) == 0) return(data.frame())
-      
-      display_data <- data.frame(
-        File = func_data$file_name,
-        Function = func_data$function_name,
-        Arguments = sapply(docs_data$parsed_args, function(x) {
-          if (length(x) == 0) return("()")
-          paste(names(x), collapse = ", ")
-        }),
-        Documented = ifelse(docs_data$has_docs, "\u2713", "\u2717"),
-        stringsAsFactors = FALSE
-      )
-      
-      DT::datatable(display_data, 
-                    selection = "single",
-                    options = list(pageLength = 15, scrollX = TRUE))
-    })
-    
-    # Handle function selection
-    shiny::observeEvent(input$functions_table_rows_selected, {
-      if (is.null(values$package_data) || length(input$functions_table_rows_selected) == 0) return()
-      
-      selected_row <- input$functions_table_rows_selected
-      func_data <- values$package_data$functions
-      docs_data <- values$package_data$documentation
-      
-      values$current_function <- list(
-        name = func_data$function_name[selected_row],
-        file_path = func_data$file_path[selected_row], 
-        args = docs_data$parsed_args[[selected_row]],
-        existing_docs = docs_data$existing_docs[selected_row],
-        has_docs = docs_data$has_docs[selected_row]
-      )
-      
-      # Update function code display (simplified - just show function signature)
-      func_signature <- paste0(values$current_function$name, "(", 
-                              paste(names(values$current_function$args), collapse = ", "), ")")
-      shinyAce::updateAceEditor(session, "function_code", value = func_signature)
-      
-      # Update documentation editor
-      if (values$current_function$has_docs && nchar(values$current_function$existing_docs) > 0) {
-        shinyAce::updateAceEditor(session, "docs_editor", value = values$current_function$existing_docs)
-      } else {
-        # Generate template
-        template <- generate_roxygen_template(
-          function_name = values$current_function$name,
-          args = values$current_function$args,
-          param_suggestions = values$package_data$parameter_history
-        )
-        shinyAce::updateAceEditor(session, "docs_editor", value = template)
+      if (is.null(values$package_data)) {
+        return("No package loaded. Check the package path and click 'Reload Package'.")
       }
+      
+      tryCatch({
+        stats <- values$package_data$stats
+        missing_count <- if (!is.null(values$dependency_data)) length(values$dependency_data$missing) else 0
+        
+        paste(
+          "Functions found:", stats$total_functions, "\n",
+          "Documented:", stats$documented_functions, "\n", 
+          "Undocumented:", stats$total_functions - stats$documented_functions, "\n",
+          "Files:", stats$total_files, "\n",
+          "Missing packages:", missing_count
+        )
+      }, error = function(e) {
+        paste("Error generating summary:", e$message)
+      })
+    })
+    
+    # Functions table with enhanced error handling
+    output$functions_table <- DT::renderDataTable({
+      if (is.null(values$package_data)) {
+        return(data.frame(Message = "No package data available"))
+      }
+      
+      tryCatch({
+        func_data <- values$package_data$functions
+        docs_data <- values$package_data$documentation
+        
+        if (nrow(func_data) == 0) {
+          return(data.frame(Message = "No functions found in package"))
+        }
+        
+        # Debug output
+        message("Creating functions table with ", nrow(func_data), " functions")
+        
+        display_data <- data.frame(
+          File = func_data$file_name,
+          Function = func_data$function_name,
+          Arguments = sapply(docs_data$parsed_args, function(x) {
+            if (length(x) == 0) return("()")
+            args_preview <- names(x)
+            if (length(args_preview) > 3) {
+              args_preview <- c(args_preview[1:3], "...")
+            }
+            paste(args_preview, collapse = ", ")
+          }),
+          Documented = ifelse(docs_data$has_docs, "\u2713", "\u2717"),
+          stringsAsFactors = FALSE
+        )
+        
+        message("Display data created with ", nrow(display_data), " rows")
+        
+        DT::datatable(display_data, 
+                      selection = "single",
+                      options = list(
+                        pageLength = 15, 
+                        scrollX = TRUE,
+                        search = list(regex = FALSE, caseInsensitive = TRUE)
+                      ))
+      }, error = function(e) {
+        message("Error creating functions table: ", e$message)
+        data.frame(Error = paste("Error creating table:", e$message))
+      })
+    })
+    
+    # Handle function selection with better error handling
+    shiny::observeEvent(input$functions_table_rows_selected, {
+      if (is.null(values$package_data) || length(input$functions_table_rows_selected) == 0) {
+        return()
+      }
+      
+      tryCatch({
+        selected_row <- input$functions_table_rows_selected
+        func_data <- values$package_data$functions
+        docs_data <- values$package_data$documentation
+        
+        if (selected_row > nrow(func_data)) {
+          message("Selected row ", selected_row, " is out of bounds (max: ", nrow(func_data), ")")
+          return()
+        }
+        
+        values$current_function <- list(
+          name = func_data$function_name[selected_row],
+          file_path = func_data$file_path[selected_row], 
+          args = docs_data$parsed_args[[selected_row]],
+          existing_docs = docs_data$existing_docs[selected_row],
+          has_docs = docs_data$has_docs[selected_row]
+        )
+        
+        message("Selected function: ", values$current_function$name)
+        
+        # Update function code display
+        func_signature <- paste0(
+          values$current_function$name, "(",
+          if (length(values$current_function$args) > 0) {
+            paste(names(values$current_function$args), collapse = ", ")
+          } else {
+            ""
+          },
+          ")"
+        )
+        
+        shinyAce::updateAceEditor(session, "function_code", value = func_signature)
+        
+        # Update documentation editor
+        if (values$current_function$has_docs && nchar(values$current_function$existing_docs) > 0) {
+          shinyAce::updateAceEditor(session, "docs_editor", value = values$current_function$existing_docs)
+        } else {
+          # Generate template
+          template <- generate_roxygen_template(
+            function_name = values$current_function$name,
+            args = values$current_function$args,
+            param_suggestions = values$package_data$parameter_history
+          )
+          shinyAce::updateAceEditor(session, "docs_editor", value = template)
+        }
+        
+      }, error = function(e) {
+        message("Error handling function selection: ", e$message)
+        shiny::showNotification(paste("Error selecting function:", e$message), type = "error")
+      })
     })
     
     # Auto-generate template
     shiny::observeEvent(input$auto_template, {
-      if (is.null(values$current_function)) return()
+      if (is.null(values$current_function)) {
+        shiny::showNotification("No function selected", type = "warning")
+        return()
+      }
       
-      template <- generate_roxygen_template(
-        function_name = values$current_function$name,
-        args = values$current_function$args,
-        param_suggestions = values$package_data$parameter_history,
-        template_type = "exported"
-      )
-      
-      shinyAce::updateAceEditor(session, "docs_editor", value = template)
+      tryCatch({
+        template <- generate_roxygen_template(
+          function_name = values$current_function$name,
+          args = values$current_function$args,
+          param_suggestions = values$package_data$parameter_history,
+          template_type = "exported"
+        )
+        
+        shinyAce::updateAceEditor(session, "docs_editor", value = template)
+        shiny::showNotification("Template generated successfully!", type = "success")
+        
+      }, error = function(e) {
+        shiny::showNotification(paste("Error generating template:", e$message), type = "error")
+      })
     })
     
     # Save documentation
@@ -213,59 +348,80 @@ create_doc_server <- function() {
         return("Select a function to see parameter suggestions")
       }
       
-      if (length(values$current_function$args) == 0) {
-        return("Function has no parameters")
-      }
-      
-      suggestions <- ""
-      for (arg_name in names(values$current_function$args)) {
-        param_suggestions <- suggest_parameters(values$package_data, arg_name)
-        
-        if (length(param_suggestions) > 0) {
-          suggestions <- paste0(suggestions, 
-                               arg_name, " suggestions:\n",
-                               paste("  -", param_suggestions, collapse = "\n"),
-                               "\n\n")
+      tryCatch({
+        if (length(values$current_function$args) == 0) {
+          return("Function has no parameters")
         }
-      }
-      
-      if (suggestions == "") {
-        return("No parameter suggestions available for this function")
-      }
-      
-      return(suggestions)
+        
+        suggestions <- ""
+        for (arg_name in names(values$current_function$args)) {
+          param_suggestions <- suggest_parameters(values$package_data, arg_name)
+          
+          if (length(param_suggestions) > 0) {
+            suggestions <- paste0(suggestions, 
+                                 arg_name, " suggestions:\n",
+                                 paste("  -", param_suggestions, collapse = "\n"),
+                                 "\n\n")
+          }
+        }
+        
+        if (suggestions == "") {
+          return("No parameter suggestions available for this function")
+        }
+        
+        return(suggestions)
+        
+      }, error = function(e) {
+        return(paste("Error getting suggestions:", e$message))
+      })
     })
     
-    # Dependencies summary
+    # Dependencies summary with enhanced formatting
     output$dependencies_summary <- shiny::renderText({
-      if (is.null(values$dependency_data)) return("No dependency data available")
+      if (is.null(values$dependency_data)) {
+        return("No dependency data available. Try reloading the package.")
+      }
       
-      report <- generate_dependency_report(values$dependency_data)
-      return(report)
+      tryCatch({
+        report <- generate_dependency_report(values$dependency_data)
+        return(report)
+      }, error = function(e) {
+        return(paste("Error generating dependency report:", e$message))
+      })
     })
     
     # Missing packages
     output$missing_packages <- shiny::renderText({
-      if (is.null(values$dependency_data)) return("No dependency data available")
-      
-      missing <- values$dependency_data$missing
-      
-      if (length(missing) == 0) {
-        return("\u2705 All detected packages are installed!")
+      if (is.null(values$dependency_data)) {
+        return("No dependency data available")
       }
       
-      result <- paste0(
-        "The following packages are used in your code but not installed:\n\n",
-        paste(paste0("\u2022 ", missing), collapse = "\n"),
-        "\n\nClick 'Install Missing Packages' to install them automatically."
-      )
-      
-      return(result)
+      tryCatch({
+        missing <- values$dependency_data$missing
+        
+        if (length(missing) == 0) {
+          return("\u2705 All detected packages are installed!")
+        }
+        
+        result <- paste0(
+          "The following packages are used in your code but not installed:\n\n",
+          paste(paste0("\u2022 ", missing), collapse = "\n"),
+          "\n\nClick 'Install Missing Packages' to install them automatically."
+        )
+        
+        return(result)
+        
+      }, error = function(e) {
+        return(paste("Error checking missing packages:", e$message))
+      })
     })
     
     # Install missing packages
     shiny::observeEvent(input$install_missing, {
-      if (is.null(values$dependency_data)) return()
+      if (is.null(values$dependency_data)) {
+        shiny::showNotification("No dependency data available", type = "warning")
+        return()
+      }
       
       missing <- values$dependency_data$missing
       
@@ -318,13 +474,17 @@ create_doc_server <- function() {
     
     # Namespace analysis outputs
     output$namespace_summary <- shiny::renderText({
-      if (is.null(values$namespace_analysis)) return("No namespace analysis available")
+      if (is.null(values$namespace_analysis)) {
+        return("No namespace analysis available")
+      }
       
       return(values$namespace_analysis$summary)
     })
     
     output$namespace_report <- shiny::renderText({
-      if (is.null(values$namespace_analysis)) return("No namespace analysis available")
+      if (is.null(values$namespace_analysis)) {
+        return("No namespace analysis available")
+      }
       
       if (values$namespace_analysis$stats$total_opportunities == 0) {
         return("✅ No namespace conversion opportunities found!")
@@ -336,7 +496,10 @@ create_doc_server <- function() {
     
     # Apply namespace conversion
     shiny::observeEvent(input$apply_namespace, {
-      if (is.null(values$namespace_analysis)) return()
+      if (is.null(values$namespace_analysis)) {
+        shiny::showNotification("No namespace analysis available", type = "warning")
+        return()
+      }
       
       if (values$namespace_analysis$stats$total_opportunities == 0) {
         shiny::showNotification("No namespace opportunities found", type = "message")
@@ -425,9 +588,76 @@ create_doc_server <- function() {
       })
     }
     
-    # R CMD Check fixes (these remain the same as they're already functional)
+#' Check R Files Diagnostic (Updated)
+#'
+#' Diagnostic function to check what R files are available in a directory
+#' and provide information about package structure. Now checks both .R and .r files.
+#'
+#' @param path Character. Path to check (default: ".")
+#'
+#' @examples
+#' \dontrun{
+#' # Check current directory
+#' check_r_files()
+#' 
+#' # Check specific package
+#' check_r_files("/path/to/package")
+#' }
+#'
+#' @export
+check_r_files <- function(path = ".") {
+  cat("=== R FILES DIAGNOSTIC ===\n")
+  cat("Checking path:", normalizePath(path, mustWork = FALSE), "\n\n")
+  
+  # Check different possible locations
+  locations <- c(
+    "R" = file.path(path, "R"),
+    "Current dir" = path,
+    "src" = file.path(path, "src"),
+    "scripts" = file.path(path, "scripts")
+  )
+  
+  for (name in names(locations)) {
+    dir_path <- locations[[name]]
+    cat("Checking", name, "directory:", dir_path, "\n")
     
-    # Global variables fix
+    if (dir.exists(dir_path)) {
+      # Updated to check for both .R and .r files
+      r_files <- list.files(dir_path, pattern = "\\.[Rr]$", full.names = TRUE, recursive = TRUE)
+      cat("  ✓ Directory exists\n")
+      cat("  ✓ Found", length(r_files), "R files (.R and .r)\n")
+      
+      if (length(r_files) > 0) {
+        cat("  Files:\n")
+        for (f in utils::head(r_files, 10)) {  # Show first 10 files
+          cat("    -", basename(f), "\n")
+        }
+        if (length(r_files) > 10) cat("    ... and", length(r_files) - 10, "more\n")
+      }
+    } else {
+      cat("  ✗ Directory does not exist\n")
+    }
+    cat("\n")
+  }
+  
+  # Check if this looks like an R package
+  has_description <- file.exists(file.path(path, "DESCRIPTION"))
+  has_namespace <- file.exists(file.path(path, "NAMESPACE"))
+  
+  cat("Package indicators:\n")
+  cat("  DESCRIPTION file:", if(has_description) "✓" else "✗", "\n")
+  cat("  NAMESPACE file:", if(has_namespace) "✓" else "✗", "\n")
+  
+  if (has_description && has_namespace) {
+    cat("  ✓ This looks like an R package\n")
+  } else {
+    cat("  ⚠ This doesn't look like a standard R package\n")
+  }
+  
+  invisible(NULL)
+}
+    
+    # Global variables fix (unchanged)
     output$global_vars_help <- shiny::renderText({
       "Paste R CMD check output containing 'no visible binding for global variable' errors here:"
     })
@@ -455,7 +685,7 @@ create_doc_server <- function() {
       })
     })
     
-    # Non-ASCII fix
+    # Non-ASCII fix (unchanged)
     output$non_ascii_help <- shiny::renderText({
       "Paste R CMD check output containing 'non-ASCII characters' errors here:"
     })

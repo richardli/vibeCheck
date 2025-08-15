@@ -15,5 +15,5 @@ scan_r_functions(package_path, verbose = TRUE)
 Data.frame with function information
 }
 \description{
-Scan R Functions in Package
+Updated to scan both .R and .r files (case insensitive).
 }

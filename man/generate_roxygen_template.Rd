@@ -9,7 +9,8 @@ generate_roxygen_template(
   args,
   param_suggestions = NULL,
   template_type = "exported",
-  add_examples = TRUE
+  add_examples = TRUE,
+  example_template = NULL
 )
 }
 \arguments{
@@ -22,6 +23,8 @@ generate_roxygen_template(
 \item{template_type}{Character. Type of template ("standard", "exported", "internal")}
 
 \item{add_examples}{Logical. Whether to include examples section}
+
+\item{example_template}{Character. Custom example template with \link{FUNCNAME} placeholder (optional)}
 }
 \value{
 Character. Roxygen2 documentation template
@@ -29,6 +32,7 @@ Character. Roxygen2 documentation template
 \description{
 Creates a roxygen2 documentation template for a function with smart
 parameter suggestions based on existing documentation patterns.
+Enhanced with custom example templates.
 }
 \examples{
 \dontrun{
@@ -41,6 +45,12 @@ pkg_info <- analyze_package()
 template <- generate_roxygen_template("process_data", 
                                      list(data = NULL, verbose = "TRUE"),
                                      pkg_info$parameter_history)
+
+# With custom example template
+custom_template <- "dhsData <- getDHSdata(country = \"Zambia\", indicator = \"[FUNCNAME]\", year = 2018)"
+template <- generate_roxygen_template("get_mortality", 
+                                     list(country = NULL),
+                                     example_template = custom_template)
 
 # Internal function template
 template <- generate_roxygen_template("helper_func", 

@@ -2,9 +2,10 @@
 #'
 #' Main function to analyze an R package, extracting functions, documentation,
 #' dependencies, and other metadata. Returns a simple list structure.
+#' Updated to handle both .R and .r file extensions.
 #'
 #' @param path Character. Path to package directory (default: ".")
-#' @param include_dependencies Logical. Whether to analyze dependencies (default: TRUE)
+#' @param include_dependencies Logical. Whether to analyze dependencies (default: FALSE)
 #' @param verbose Logical. Print progress messages (default: TRUE)
 #'
 #' @return List with package analysis results
@@ -22,14 +23,14 @@
 #' }
 #'
 #' @export
-analyze_package <- function(path = ".", include_dependencies = TRUE, verbose = TRUE) {
+analyze_package <- function(path = ".", include_dependencies = FALSE, verbose = TRUE) {
   
   if (verbose) message("Analyzing package at: ", path)
   
   # Detect package root
   package_path <- detect_package_root(path, verbose = verbose)
   
-  # Scan R functions
+  # Scan R functions (now handles both .R and .r)
   if (verbose) message("Scanning R functions...")
   functions_data <- scan_r_functions(package_path, verbose = verbose)
   
@@ -110,13 +111,15 @@ detect_package_root <- function(path, verbose = TRUE) {
 is_package_root <- function(path) {
   has_description <- file.exists(file.path(path, "DESCRIPTION"))
   has_r_dir <- dir.exists(file.path(path, "R"))
-  has_r_files <- length(list.files(path, pattern = "\\.R$")) > 0
+  has_r_files <- length(list.files(path, pattern = "\\.[Rr]$")) > 0  # Fixed: case insensitive
   has_namespace <- file.exists(file.path(path, "NAMESPACE"))
   
   return(has_description && (has_r_dir || has_r_files || has_namespace))
 }
 
 #' Scan R Functions in Package
+#'
+#' Updated to scan both .R and .r files (case insensitive).
 #'
 #' @param package_path Character. Package root path
 #' @param verbose Logical. Print messages
@@ -134,7 +137,8 @@ scan_r_functions <- function(package_path, verbose = TRUE) {
   r_files <- c()
   for (dir in possible_dirs) {
     if (dir.exists(dir)) {
-      files <- list.files(dir, pattern = "\\.R$", full.names = TRUE, recursive = TRUE)
+      # Updated pattern to match both .R and .r files
+      files <- list.files(dir, pattern = "\\.[Rr]$", full.names = TRUE, recursive = TRUE)
       r_files <- c(r_files, files)
     }
   }
@@ -142,10 +146,25 @@ scan_r_functions <- function(package_path, verbose = TRUE) {
   r_files <- unique(r_files)
   
   if (length(r_files) == 0) {
+    if (verbose) {
+      message("No R files found. Checked directories:")
+      for (dir in possible_dirs) {
+        if (dir.exists(dir)) {
+          message("  ", dir, " (exists)")
+        } else {
+          message("  ", dir, " (does not exist)")
+        }
+      }
+    }
     stop("No R files found in package")
   }
   
-  if (verbose) message("Found ", length(r_files), " R files")
+  if (verbose) {
+    message("Found ", length(r_files), " R files:")
+    for (file in r_files) {
+      message("  ", basename(file))
+    }
+  }
   
   # Parse each file
   all_functions <- list()
@@ -157,12 +176,17 @@ scan_r_functions <- function(package_path, verbose = TRUE) {
   }
   
   if (length(all_functions) == 0) {
+    if (verbose) message("No functions found in any R files")
     return(data.frame())
   }
   
   # Combine all functions
   result <- do.call(rbind, all_functions)
   rownames(result) <- NULL
+  
+  if (verbose) {
+    message("Found ", nrow(result), " functions total")
+  }
   
   return(result)
 }
@@ -184,8 +208,9 @@ extract_functions_from_file <- function(file_path) {
   
   file_text <- paste(content, collapse = "\n")
   
-  # Regex to find function definitions
-  func_pattern <- "((?:#'[^\n]*\n)*)(\\s*)([a-zA-Z_][a-zA-Z0-9_\\.]*)\\s*<-\\s*function\\s*\\(([^\\)]*)\\)"
+  # Improved regex to find function definitions with better capture groups
+  # This regex looks for: (optional roxygen comments)(whitespace)(function_name)<-function(args)
+  func_pattern <- "(?:^|\\n)((?:\\s*#'[^\\n]*\\n)*)(\\s*)([a-zA-Z_][a-zA-Z0-9_\\.]*)\\s*<-\\s*function\\s*\\(([^\\)]*)\\)"
   
   matches <- gregexpr(func_pattern, file_text, perl = TRUE)[[1]]
   
@@ -208,11 +233,14 @@ extract_functions_from_file <- function(file_path) {
   match_lengths <- attr(matches, "capture.length")
   
   for (i in seq_along(matches)) {
-    start_pos <- matches[i]
+    match_start <- matches[i]
     
     # Extract captured groups
     docs_start <- match_data[i, 1]
     docs_length <- match_lengths[i, 1]
+    
+    whitespace_start <- match_data[i, 2]
+    whitespace_length <- match_lengths[i, 2]
     
     func_name_start <- match_data[i, 3]
     func_name_length <- match_lengths[i, 3]
@@ -221,9 +249,21 @@ extract_functions_from_file <- function(file_path) {
     args_length <- match_lengths[i, 4]
     
     # Extract strings
-    existing_docs <- substr(file_text, docs_start, docs_start + docs_length - 1)
+    existing_docs <- if (docs_length > 0) {
+      substr(file_text, docs_start, docs_start + docs_length - 1)
+    } else {
+      ""
+    }
+    
     function_name <- substr(file_text, func_name_start, func_name_start + func_name_length - 1)
     args_string <- substr(file_text, args_start, args_start + args_length - 1)
+    
+    # The start position should be the beginning of the documentation or function
+    # If there are docs, start from docs; if not, start from function
+    start_pos <- if (docs_length > 0) docs_start else whitespace_start
+    
+    # Check if we actually have documentation
+    has_docs_flag <- docs_length > 0 && nchar(trimws(existing_docs)) > 0
     
     functions_info <- rbind(functions_info, data.frame(
       file_path = file_path,
@@ -231,12 +271,83 @@ extract_functions_from_file <- function(file_path) {
       function_name = function_name,
       args_string = trimws(args_string),
       start_pos = start_pos,
-      has_docs = nchar(trimws(existing_docs)) > 0,
+      has_docs = has_docs_flag,
       stringsAsFactors = FALSE
     ))
   }
   
   return(functions_info)
+}
+
+#' Extract Function Documentation from File (Fixed)
+#'
+#' @param file_path Character. Path to file
+#' @param start_pos Integer. Starting position of function or its documentation
+#' @return Character. Documentation string
+extract_function_docs <- function(file_path, start_pos) {
+  
+  tryCatch({
+    content <- readLines(file_path, warn = FALSE)
+  }, error = function(e) {
+    warning("Could not read file: ", file_path)
+    return("")
+  })
+  
+  if (length(content) == 0) {
+    return("")
+  }
+  
+  file_text <- paste(content, collapse = "\n")
+  
+  # Convert character position to line number
+  text_before <- substr(file_text, 1, start_pos - 1)
+  lines_before <- length(strsplit(text_before, "\n")[[1]])
+  
+  # Start from the line before start_pos and work backwards
+  lines <- strsplit(file_text, "\n")[[1]]
+  
+  # Find the actual function line by looking forward from start_pos
+  function_line_idx <- lines_before
+  
+  # Work backwards from the function line to collect all roxygen comments
+  roxygen_lines <- character(0)
+  
+  # Start from the line just before the function and work backwards
+  for (i in (function_line_idx - 1):max(1, function_line_idx - 50)) {
+    if (i < 1) break
+    
+    line <- lines[i]
+    trimmed_line <- trimws(line)
+    
+    # If we hit an empty line, continue (allow gaps in documentation)
+    if (nchar(trimmed_line) == 0) {
+      # Only continue if we haven't started collecting roxygen lines yet
+      # or if we're in the middle of documentation block
+      if (length(roxygen_lines) == 0) {
+        next
+      } else {
+        # If we already have roxygen lines, an empty line might be part of the docs
+        roxygen_lines <- c(line, roxygen_lines)
+        next
+      }
+    }
+    
+    # Check for roxygen comment
+    if (stringr::str_detect(trimmed_line, "^#'")) {
+      roxygen_lines <- c(line, roxygen_lines)
+    } else {
+      # Stop at first non-roxygen, non-empty line
+      break
+    }
+  }
+  
+  # If we found roxygen lines, combine them
+  if (length(roxygen_lines) > 0) {
+    # Remove the reversal - roxygen_lines is already in correct order
+    return(paste(roxygen_lines, collapse = "\n"))
+  }
+  
+  return("")
 }
 
 #' Parse Function Documentation

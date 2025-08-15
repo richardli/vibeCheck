@@ -2,7 +2,7 @@
 
 > **Interactive R Package Development Assistant**
 
-_Disclaimer:_ **This package is completely created with vibe coding using Claude**, thus the name of the package. I have not checked all function details, except for small things that come up in my experiment. It likely contains bugs and unhandled edge cases, but it does what it is designed to do for my specific use case. I may vibe-update this package when I need to use it to update my R packages in the future.
+_Disclaimer:_ **This package is completely created with vibe coding using Claude**, thus the name of the package. I have not checked all function details, except for small things that come up in my experiment. It likely contains bugs and unhandled edge cases, but it does what it is designed to do for my specific use case. I may vibe-update this package when I need to use it to update my R packages in the future. If you want to read about how I vibe coded this package, see [these running thoughts](vibe-coding-thoughts.md).
 
 **vibeCheck** is a comprehensive toolkit for R package development that combines interactive analysis, automated documentation generation, dependency management, and common R CMD check fixes. Built with a clean functional architecture, it provides both a beautiful Shiny interface and powerful command-line tools.
 
@@ -51,9 +51,16 @@ print(pkg_info$stats)
 # Generate documentation for all undocumented functions
 docs <- generate_bulk_documentation(pkg_info, save_to_files = TRUE)
 
-# Check and install missing dependencies
-deps <- analyze_package_dependencies()
-install_missing_packages(deps$missing)
+# Analyze your package dependencies  
+deps <- analyze_package_dependencies("path/to/package/root")
+
+# Example of dependency analysis: extract all dplyr functions you're using
+dplyr_funcs <- extract_package_functions("dplyr", dependency_data = deps)
+print(dplyr_funcs$functions_found)
+
+# Generate a detailed report
+report <- generate_package_usage_report("dplyr")
+cat(report)
 ```
 
 ## 📊 Core Functions
@@ -381,10 +388,6 @@ vibecheck()
 ## 🤝 Contributing
 
 This package was created through "vibe coding" with Claude AI. While it works well for the intended use cases, there may be edge cases and bugs. Contributions, bug reports, and feature requests are welcome!
-
-## 📄 License
-
-[Add your license information here]
 
 ## 🙏 Acknowledgments
 
