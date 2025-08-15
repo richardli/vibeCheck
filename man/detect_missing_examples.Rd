@@ -5,6 +5,8 @@
 \title{Detect Missing or Empty Examples}
 \usage{
 detect_missing_examples(package_data, check_empty_dontrun = TRUE)
+
+detect_missing_examples(package_data, check_empty_dontrun = TRUE)
 }
 \arguments{
 \item{package_data}{List. Result from analyze_package()}
@@ -13,11 +15,25 @@ detect_missing_examples(package_data, check_empty_dontrun = TRUE)
 }
 \value{
 List with information about missing examples
+
+List with information about missing examples
 }
 \description{
 Analyzes existing documentation to find functions with missing or empty examples.
+
+Analyzes existing documentation to find functions with missing or empty examples.
+Updated to use the fixed logic.
 }
 \examples{
+\dontrun{
+pkg_info <- analyze_package()
+missing_examples <- detect_missing_examples(pkg_info)
+
+# Check results
+print(missing_examples$functions_needing_examples)
+cat(missing_examples$summary)
+}
+
 \dontrun{
 pkg_info <- analyze_package()
 missing_examples <- detect_missing_examples(pkg_info)

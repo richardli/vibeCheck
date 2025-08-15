@@ -800,59 +800,8 @@ detect_missing_examples <- function(package_data, check_empty_dontrun = TRUE) {
   ))
 }
 
-#' Extract Examples Section from Documentation
-#'
-#' @param docs_text Character. Documentation text
-#' @return Character. Examples section content
-extract_examples_section <- function(docs_text) {
-  
-  # Pattern to match @examples section until next @ tag or end
-  # This captures everything after @examples including empty lines
-  examples_pattern <- "#'\\s*@examples\\s*([\\s\\S]*?)(?=#'\\s*@\\w+|$)"
-  examples_match <- stringr::str_match(docs_text, examples_pattern)
-  
-  if (is.na(examples_match[1, 1])) {
-    return("")
-  }
-  
-  raw_content <- examples_match[1, 2]
-  
-  # Clean up the content - remove empty roxygen lines but preserve structure
-  lines <- strsplit(raw_content, "\n")[[1]]
-  
-  # Process each line
-  cleaned_lines <- character(0)
-  for (line in lines) {
-    # Remove leading/trailing whitespace
-    clean_line <- trimws(line)
-    
-    # Skip completely empty lines
-    if (nchar(clean_line) == 0) {
-      next
-    }
-    
-    # Skip lines that are just #' with whitespace
-    if (grepl("^#'\\s*$", clean_line)) {
-      next
-    }
-    
-    # For lines with content, remove the #' prefix and keep the rest
-    if (grepl("^#'", clean_line)) {
-      content_part <- stringr::str_replace(clean_line, "^#'\\s*", "")
-      cleaned_lines <- c(cleaned_lines, content_part)
-    } else {
-      # Line without #' prefix (shouldn't happen in roxygen, but handle it)
-      cleaned_lines <- c(cleaned_lines, clean_line)
-    }
-  }
-  
-  # Join the cleaned lines back together
-  result <- paste(cleaned_lines, collapse = "\n")
-  
-  return(trimws(result))
-}
 
-#' Check if Examples Section is Empty or Just Empty dontrun
+#' Check if Examples Section is Empty or Just Empty dontrun (FIXED)
 #'
 #' @param examples_content Character. Examples section content
 #' @return Logical. TRUE if examples are empty or just empty dontrun blocks
@@ -862,9 +811,8 @@ is_examples_section_empty <- function(examples_content) {
     return(TRUE)
   }
   
-  # Remove comment markers and whitespace
-  clean_content <- stringr::str_replace_all(examples_content, "#'\\s*", "")
-  clean_content <- trimws(clean_content)
+  # Remove all whitespace and newlines for a clean check
+  clean_content <- gsub("\\s+", " ", trimws(examples_content))
   
   if (nchar(clean_content) == 0) {
     return(TRUE)
@@ -874,7 +822,7 @@ is_examples_section_empty <- function(examples_content) {
   has_dontrun <- stringr::str_detect(clean_content, "\\\\dontrun")
   
   if (has_dontrun) {
-    # Extract content inside \dontrun{} blocks
+    # Extract content inside \dontrun{} blocks with better regex
     dontrun_content <- extract_dontrun_content(clean_content)
     
     if (nchar(trimws(dontrun_content)) == 0) {
@@ -890,73 +838,13 @@ is_examples_section_empty <- function(examples_content) {
   }
 }
 
-#' Check if Raw Content (without dontrun) is Empty or Just Placeholders
-#'
-#' @param content Character. Clean content without comment markers
-#' @return Logical. TRUE if content is empty or just placeholders
-is_raw_content_empty <- function(content) {
-  
-  if (nchar(trimws(content)) == 0) {
-    return(TRUE)
-  }
-  
-  # Split into lines and check each line
-  lines <- strsplit(content, "\n")[[1]]
-  lines <- trimws(lines)
-  
-  # Remove empty lines
-  lines <- lines[nchar(lines) > 0]
-  
-  if (length(lines) == 0) {
-    return(TRUE)
-  }
-  
-  # Patterns that indicate empty or placeholder content
-  empty_patterns <- c(
-    "^\\s*$",                    # Empty lines
-    "^\\s*#\\s*$",               # Just # with whitespace
-    "^\\s*\\[.*\\]\\s*$",        # [Description] placeholders
-    "^\\s*# Add example.*$",     # Common placeholder comments
-    "^\\s*# Example.*$",
-    "^\\s*# TODO.*$",
-    "^\\s*# Your code here.*$",
-    "^\\s*# Insert example.*$",
-    "^\\s*# \\.\\.\\.$"          # # ...
-  )
-  
-  substantial_lines <- character(0)
-  
-  for (line in lines) {
-    is_empty_line <- FALSE
-    
-    for (pattern in empty_patterns) {
-      if (stringr::str_detect(line, pattern)) {
-        is_empty_line <- TRUE
-        break
-      }
-    }
-    
-    if (!is_empty_line) {
-      substantial_lines <- c(substantial_lines, line)
-    }
-  }
-  
-  # If we have substantial lines, it's NOT empty
-  if (length(substantial_lines) > 0) {
-    return(FALSE)
-  }
-  
-  # If no substantial lines found, it's empty
-  return(TRUE)
-}
-
-#' Extract Content Inside \\dontrun{} Blocks
+#' Extract Content Inside \\dontrun{} Blocks (FIXED)
 #'
 #' @param content Character. Clean content without comment markers
 #' @return Character. Content inside dontrun blocks
 extract_dontrun_content <- function(content) {
   
-  # Pattern to match \dontrun{...} blocks, handling nested braces
+  # Improved pattern to match \dontrun{...} blocks, handling nested braces better
   dontrun_pattern <- "\\\\dontrun\\s*\\{([^{}]*(?:\\{[^{}]*\\}[^{}]*)*)\\}"
   
   matches <- stringr::str_match_all(content, dontrun_pattern)[[1]]
@@ -969,187 +857,6 @@ extract_dontrun_content <- function(content) {
   all_content <- paste(matches[, 2], collapse = "\n")
   
   return(trimws(all_content))
-}
-
-#' Check if Dontrun Content is Empty or Just Placeholders
-#'
-#' @param dontrun_content Character. Content inside dontrun blocks
-#' @return Logical. TRUE if content is empty or just placeholders
-is_dontrun_content_empty <- function(dontrun_content) {
-  
-  if (nchar(trimws(dontrun_content)) == 0) {
-    return(TRUE)
-  }
-  
-  # Split into lines and check each line
-  lines <- strsplit(dontrun_content, "\n")[[1]]
-  lines <- trimws(lines)
-  
-  # Remove empty lines
-  lines <- lines[nchar(lines) > 0]
-  
-  if (length(lines) == 0) {
-    return(TRUE)
-  }
-  
-  # Patterns that indicate empty or placeholder content
-  empty_patterns <- c(
-    "^\\s*$",                    # Empty lines
-    "^\\s*#.*$",                 # Comment-only lines
-    "^\\s*\\[.*\\]\\s*$",        # [Description] placeholders
-    "^\\s*# Add example.*$",     # Common placeholder comments
-    "^\\s*# Example.*$",
-    "^\\s*# TODO.*$",
-    "^\\s*# Your code here.*$",
-    "^\\s*# Insert example.*$"
-  )
-  
-  substantial_lines <- character(0)
-  
-  for (line in lines) {
-    is_empty_line <- FALSE
-    
-    for (pattern in empty_patterns) {
-      if (stringr::str_detect(line, pattern)) {
-        is_empty_line <- TRUE
-        break
-      }
-    }
-    
-    if (!is_empty_line) {
-      substantial_lines <- c(substantial_lines, line)
-    }
-  }
-  
-  # If no substantial lines found, it's empty
-  if (length(substantial_lines) == 0) {
-    return(TRUE)
-  }
-  
-  # Check if remaining content is just variable assignments without real code
-  # This is more conservative - only flag truly minimal content
-  all_substantial <- paste(substantial_lines, collapse = "\n")
-  
-  # Very minimal patterns that suggest placeholder content
-  minimal_patterns <- c(
-    "^\\s*x\\s*<-\\s*1\\s*$",           # x <- 1
-    "^\\s*data\\s*<-\\s*NULL\\s*$",     # data <- NULL
-    "^\\s*result\\s*<-\\s*NULL\\s*$",   # result <- NULL
-    "^\\s*\\w+\\s*<-\\s*\\w+\\s*$"     # single assignment only
-  )
-  
-  # Only flag as empty if it's REALLY minimal
-  if (length(substantial_lines) == 1) {
-    for (pattern in minimal_patterns) {
-      if (stringr::str_detect(all_substantial, pattern)) {
-        return(TRUE)
-      }
-    }
-  }
-  
-  # If we get here, there's substantial content
-  return(FALSE)
-}
-
-#' Extract Content Inside \\dontrun{} Blocks
-#'
-#' @param content Character. Clean content without comment markers
-#' @return Character. Content inside dontrun blocks
-extract_dontrun_content <- function(content) {
-  
-  # Pattern to match \dontrun{...} blocks, handling nested braces
-  dontrun_pattern <- "\\\\dontrun\\s*\\{([^{}]*(?:\\{[^{}]*\\}[^{}]*)*)\\}"
-  
-  matches <- stringr::str_match_all(content, dontrun_pattern)[[1]]
-  
-  if (nrow(matches) == 0) {
-    return("")
-  }
-  
-  # Combine all dontrun content
-  all_content <- paste(matches[, 2], collapse = "\n")
-  
-  return(trimws(all_content))
-}
-
-#' Check if Dontrun Content is Empty or Just Placeholders
-#'
-#' @param dontrun_content Character. Content inside dontrun blocks
-#' @return Logical. TRUE if content is empty or just placeholders
-is_dontrun_content_empty <- function(dontrun_content) {
-  
-  if (nchar(trimws(dontrun_content)) == 0) {
-    return(TRUE)
-  }
-  
-  # Split into lines and check each line
-  lines <- strsplit(dontrun_content, "\n")[[1]]
-  lines <- trimws(lines)
-  
-  # Remove empty lines
-  lines <- lines[nchar(lines) > 0]
-  
-  if (length(lines) == 0) {
-    return(TRUE)
-  }
-  
-  # Patterns that indicate empty or placeholder content
-  empty_patterns <- c(
-    "^\\s*$",                    # Empty lines
-    "^\\s*#.*$",                 # Comment-only lines
-    "^\\s*\\[.*\\]\\s*$",        # [Description] placeholders
-    "^\\s*# Add example.*$",     # Common placeholder comments
-    "^\\s*# Example.*$",
-    "^\\s*# TODO.*$",
-    "^\\s*# Your code here.*$",
-    "^\\s*# Insert example.*$"
-  )
-  
-  substantial_lines <- character(0)
-  
-  for (line in lines) {
-    is_empty_line <- FALSE
-    
-    for (pattern in empty_patterns) {
-      if (stringr::str_detect(line, pattern)) {
-        is_empty_line <- TRUE
-        break
-      }
-    }
-    
-    if (!is_empty_line) {
-      substantial_lines <- c(substantial_lines, line)
-    }
-  }
-  
-  # If no substantial lines found, it's empty
-  if (length(substantial_lines) == 0) {
-    return(TRUE)
-  }
-  
-  # Check if remaining content is just variable assignments without real code
-  # This is more conservative - only flag truly minimal content
-  all_substantial <- paste(substantial_lines, collapse = "\n")
-  
-  # Very minimal patterns that suggest placeholder content
-  minimal_patterns <- c(
-    "^\\s*x\\s*<-\\s*1\\s*$",           # x <- 1
-    "^\\s*data\\s*<-\\s*NULL\\s*$",     # data <- NULL
-    "^\\s*result\\s*<-\\s*NULL\\s*$",   # result <- NULL
-    "^\\s*\\w+\\s*<-\\s*\\w+\\s*$"     # single assignment only
-  )
-  
-  # Only flag as empty if it's REALLY minimal
-  if (length(substantial_lines) == 1) {
-    for (pattern in minimal_patterns) {
-      if (stringr::str_detect(all_substantial, pattern)) {
-        return(TRUE)
-      }
-    }
-  }
-  
-  # If we get here, there's substantial content
-  return(FALSE)
 }
 
 #' Add Custom Examples to Functions
@@ -1502,5 +1209,302 @@ bulk_examples_update <- function(package_path = ".",
     missing_analysis = missing_analysis,
     update_result = update_result,
     template_used = example_template
+  ))
+}
+
+
+# COPY THESE FUNCTIONS INTO YOUR R/documentation_functions.r FILE
+# You can add them at the end of the file, or replace the existing versions
+
+#' Extract Examples Section from Documentation (FIXED VERSION)
+#'
+#' @param docs_text Character. Documentation text
+#' @return Character. Examples section content
+extract_examples_section <- function(docs_text) {
+  
+  # More robust pattern to match @examples section until next @ tag or end
+  examples_pattern <- "#'\\s*@examples\\s*\\n([\\s\\S]*?)(?=\\n#'\\s*@\\w+|$)"
+  examples_match <- stringr::str_match(docs_text, examples_pattern)
+  
+  if (is.na(examples_match[1, 1])) {
+    # Try alternative pattern without requiring newline after @examples
+    examples_pattern <- "#'\\s*@examples([\\s\\S]*?)(?=#'\\s*@\\w+|$)"
+    examples_match <- stringr::str_match(docs_text, examples_pattern)
+    
+    if (is.na(examples_match[1, 1])) {
+      return("")
+    }
+  }
+  
+  raw_content <- examples_match[1, 2]
+  
+  # Process line by line, removing roxygen markers but preserving content
+  lines <- strsplit(raw_content, "\n")[[1]]
+  cleaned_lines <- character(0)
+  
+  for (line in lines) {
+    # Remove #' prefix but keep everything else
+    if (grepl("^\\s*#'", line)) {
+      # More careful removal of #' - preserve spaces after #'
+      content_part <- sub("^\\s*#'", "", line)
+      # If there's content after #', remove one leading space if present
+      if (nchar(content_part) > 0 && substr(content_part, 1, 1) == " ") {
+        content_part <- substr(content_part, 2, nchar(content_part))
+      }
+      cleaned_lines <- c(cleaned_lines, content_part)
+    } else {
+      # Non-roxygen line - keep as is but trimmed
+      cleaned_lines <- c(cleaned_lines, trimws(line))
+    }
+  }
+  
+  # Join back together and trim the whole thing
+  result <- paste(cleaned_lines, collapse = "\n")
+  result <- trimws(result)
+  
+  return(result)
+}
+
+#' Check if Examples Section is Empty (FIXED VERSION)
+#'
+#' @param examples_content Character. Examples section content
+#' @return Logical. TRUE if examples are empty or just empty dontrun blocks
+is_examples_section_empty <- function(examples_content) {
+  
+  # Check for truly empty content
+  if (is.null(examples_content) || is.na(examples_content) || nchar(trimws(examples_content)) == 0) {
+    return(TRUE)
+  }
+  
+  # Check if there are \dontrun{} blocks
+  has_dontrun <- stringr::str_detect(examples_content, "\\\\dontrun\\s*\\{")
+  
+  if (has_dontrun) {
+    # Extract and check dontrun content
+    dontrun_content <- extract_dontrun_content(examples_content)
+    return(is_content_substantially_empty(dontrun_content))
+  } else {
+    # Check raw content directly
+    return(is_content_substantially_empty(examples_content))
+  }
+}
+
+#' Extract Content Inside \\dontrun{} Blocks (FIXED VERSION)
+#'
+#' @param content Character. Content containing dontrun blocks
+#' @return Character. Content inside dontrun blocks
+extract_dontrun_content <- function(content) {
+  
+  # Pattern to match \dontrun{...} - handle nested braces properly
+  # This uses a recursive approach to match balanced braces
+  
+  # First, find all \dontrun{ positions
+  dontrun_positions <- stringr::str_locate_all(content, "\\\\dontrun\\s*\\{")[[1]]
+  
+  if (nrow(dontrun_positions) == 0) {
+    return("")
+  }
+  
+  all_content <- character(0)
+  
+  for (i in seq_len(nrow(dontrun_positions))) {
+    start_pos <- dontrun_positions[i, 2] + 1  # Position after the opening {
+    
+    # Find the matching closing brace
+    brace_count <- 1
+    pos <- start_pos
+    
+    while (pos <= nchar(content) && brace_count > 0) {
+      char <- substr(content, pos, pos)
+      if (char == "{") {
+        brace_count <- brace_count + 1
+      } else if (char == "}") {
+        brace_count <- brace_count - 1
+      }
+      pos <- pos + 1
+    }
+    
+    if (brace_count == 0) {
+      # Found matching brace
+      end_pos <- pos - 2  # Position of the closing brace
+      dontrun_content <- substr(content, start_pos, end_pos)
+      all_content <- c(all_content, dontrun_content)
+    }
+  }
+  
+  # Combine all dontrun content
+  result <- paste(all_content, collapse = "\n")
+  return(trimws(result))
+}
+
+#' Check if content is substantially empty (NEW FUNCTION - ADD THIS)
+#'
+#' @param content Character. Content to check
+#' @return Logical. TRUE if content is substantially empty
+is_content_substantially_empty <- function(content) {
+  
+  if (is.null(content) || is.na(content) || nchar(trimws(content)) == 0) {
+    return(TRUE)
+  }
+  
+  # Split into lines and remove empty ones
+  lines <- strsplit(content, "\n")[[1]]
+  lines <- trimws(lines)
+  lines <- lines[nchar(lines) > 0]
+  
+  if (length(lines) == 0) {
+    return(TRUE)
+  }
+  
+  # Count lines with actual R code vs. just comments/placeholders
+  code_lines <- 0
+  placeholder_patterns <- c(
+    "^\\s*#\\s*TODO",
+    "^\\s*#\\s*Add\\s+example",
+    "^\\s*#\\s*Example",
+    "^\\s*#\\s*Your\\s+code\\s+here",
+    "^\\s*#\\s*Insert\\s+example",
+    "^\\s*#\\s*\\.{3,}",  # # ...
+    "^\\s*\\[.*\\]\\s*$"  # [Description]
+  )
+  
+  for (line in lines) {
+    # Check if this line is a placeholder
+    is_placeholder <- FALSE
+    for (pattern in placeholder_patterns) {
+      if (stringr::str_detect(line, stringr::regex(pattern, ignore_case = TRUE))) {
+        is_placeholder <- TRUE
+        break
+      }
+    }
+    
+    # If it's not a placeholder and not just a comment, count it as code
+    if (!is_placeholder) {
+      # Check if it's a pure comment line (starts with # but isn't a placeholder)
+      if (stringr::str_detect(line, "^\\s*#")) {
+        # It's a comment - these can be substantial if they're descriptive
+        # Only skip very minimal comments
+        if (!stringr::str_detect(line, "^\\s*#\\s*$")) {
+          code_lines <- code_lines + 1
+        }
+      } else {
+        # It's actual R code
+        code_lines <- code_lines + 1
+      }
+    }
+  }
+  
+  # If we have at least 1 substantial line, it's not empty
+  return(code_lines == 0)
+}
+
+# UPDATE THE EXISTING detect_missing_examples FUNCTION
+# Find this function in your file and replace it with this version:
+
+#' Detect Missing or Empty Examples (UPDATED VERSION)
+#'
+#' Analyzes existing documentation to find functions with missing or empty examples.
+#' Updated to use the fixed logic.
+#'
+#' @param package_data List. Result from analyze_package()
+#' @param check_empty_dontrun Logical. Whether to flag empty \\dontrun{} blocks (default: TRUE)
+#'
+#' @return List with information about missing examples
+#'
+#' @examples
+#' \dontrun{
+#' pkg_info <- analyze_package()
+#' missing_examples <- detect_missing_examples(pkg_info)
+#' 
+#' # Check results
+#' print(missing_examples$functions_needing_examples)
+#' cat(missing_examples$summary)
+#' }
+#'
+#' @export
+detect_missing_examples <- function(package_data, check_empty_dontrun = TRUE) {
+  
+  if (!"functions" %in% names(package_data)) {
+    stop("package_data must contain 'functions' element. Use analyze_package() first.")
+  }
+  
+  func_data <- package_data$functions
+  docs_data <- package_data$documentation
+  
+  functions_needing_examples <- character(0)
+  example_status <- list()
+  
+  for (i in seq_len(nrow(func_data))) {
+    func_name <- func_data$function_name[i]
+    has_docs <- docs_data$has_docs[i]
+    existing_docs <- if (is.na(docs_data$existing_docs[i])) "" else docs_data$existing_docs[i]
+    
+    example_status[[func_name]] <- list(
+      has_documentation = has_docs,
+      has_examples = FALSE,
+      examples_empty = FALSE,
+      needs_examples = FALSE
+    )
+    
+    if (has_docs && nchar(existing_docs) > 0) {
+      # Check for @examples section
+      has_examples <- stringr::str_detect(existing_docs, "#'\\s*@examples")
+      example_status[[func_name]]$has_examples <- has_examples
+      
+      if (has_examples) {
+        # Extract examples section
+        examples_content <- extract_examples_section(existing_docs)
+        
+        if (check_empty_dontrun) {
+          # Check if examples are substantially empty
+          is_empty <- is_examples_section_empty(examples_content)
+          example_status[[func_name]]$examples_empty <- is_empty
+          
+          if (is_empty) {
+            functions_needing_examples <- c(functions_needing_examples, func_name)
+            example_status[[func_name]]$needs_examples <- TRUE
+          }
+        }
+      } else {
+        # No examples section at all
+        functions_needing_examples <- c(functions_needing_examples, func_name)
+        example_status[[func_name]]$needs_examples <- TRUE
+      }
+    } else {
+      # No documentation at all
+      functions_needing_examples <- c(functions_needing_examples, func_name)
+      example_status[[func_name]]$needs_examples <- TRUE
+    }
+  }
+  
+  # Generate summary
+  total_functions <- nrow(func_data)
+  documented_functions <- sum(docs_data$has_docs, na.rm = TRUE)
+  functions_with_examples <- sum(sapply(example_status, function(x) x$has_examples && !x$examples_empty))
+  
+  summary_text <- paste0(
+    "EXAMPLES ANALYSIS SUMMARY\n",
+    "=========================\n",
+    "Total functions: ", total_functions, "\n",
+    "Documented functions: ", documented_functions, "\n",
+    "Functions with examples: ", functions_with_examples, "\n",
+    "Functions needing examples: ", length(functions_needing_examples), "\n\n",
+    if (length(functions_needing_examples) > 0) {
+      paste0("Functions needing examples:\n", paste("  •", functions_needing_examples, collapse = "\n"))
+    } else {
+      "✅ All functions have proper examples!"
+    }
+  )
+  
+  return(list(
+    functions_needing_examples = functions_needing_examples,
+    example_status = example_status,
+    summary = summary_text,
+    stats = list(
+      total_functions = total_functions,
+      documented_functions = documented_functions,
+      functions_with_examples = functions_with_examples,
+      functions_needing_examples = length(functions_needing_examples)
+    )
   ))
 }
