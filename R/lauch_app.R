@@ -111,8 +111,8 @@ check_r_files <- function(path = ".") {
     
     if (dir.exists(dir_path)) {
       r_files <- list.files(dir_path, pattern = "\\.R$", full.names = TRUE, recursive = TRUE)
-      cat("  ✓ Directory exists\n")
-      cat("  ✓ Found", length(r_files), "R files\n")
+      cat("  ? Directory exists\n")
+      cat("  ? Found", length(r_files), "R files\n")
       
       if (length(r_files) > 0) {
         cat("  Files:\n")
@@ -122,7 +122,7 @@ check_r_files <- function(path = ".") {
         if (length(r_files) > 10) cat("    ... and", length(r_files) - 10, "more\n")
       }
     } else {
-      cat("  ✗ Directory does not exist\n")
+      cat("  ? Directory does not exist\n")
     }
     cat("\n")
   }
@@ -132,13 +132,13 @@ check_r_files <- function(path = ".") {
   has_namespace <- file.exists(file.path(path, "NAMESPACE"))
   
   cat("Package indicators:\n")
-  cat("  DESCRIPTION file:", if(has_description) "✓" else "✗", "\n")
-  cat("  NAMESPACE file:", if(has_namespace) "✓" else "✗", "\n")
+  cat("  DESCRIPTION file:", if(has_description) "?" else "?", "\n")
+  cat("  NAMESPACE file:", if(has_namespace) "?" else "?", "\n")
   
   if (has_description && has_namespace) {
-    cat("  → This looks like an R package\n")
+    cat("  ? This looks like an R package\n")
   } else {
-    cat("  → This doesn't look like a standard R package\n")
+    cat("  ? This doesn't look like a standard R package\n")
   }
   
   invisible(NULL)
