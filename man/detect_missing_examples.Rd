@@ -2,7 +2,7 @@
 % Please edit documentation in R/documentation_functions.r
 \name{detect_missing_examples}
 \alias{detect_missing_examples}
-\title{Detect Missing or Empty Examples}
+\title{Detect Missing or Empty Examples (UPDATED VERSION)}
 \usage{
 detect_missing_examples(package_data, check_empty_dontrun = TRUE)
 }
@@ -16,6 +16,7 @@ List with information about missing examples
 }
 \description{
 Analyzes existing documentation to find functions with missing or empty examples.
+Updated to use the fixed logic.
 }
 \examples{
 \dontrun{

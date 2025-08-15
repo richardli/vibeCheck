@@ -2,7 +2,7 @@
 % Please edit documentation in R/documentation_functions.r
 \name{is_examples_section_empty}
 \alias{is_examples_section_empty}
-\title{Check if Examples Section is Empty or Just Empty dontrun}
+\title{Check if Examples Section is Empty (FIXED VERSION)}
 \usage{
 is_examples_section_empty(examples_content)
 }
@@ -13,5 +13,5 @@ is_examples_section_empty(examples_content)
 Logical. TRUE if examples are empty or just empty dontrun blocks
 }
 \description{
-Check if Examples Section is Empty or Just Empty dontrun
+Check if Examples Section is Empty (FIXED VERSION)
 }

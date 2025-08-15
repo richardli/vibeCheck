@@ -2,22 +2,16 @@
 % Please edit documentation in R/documentation_functions.r
 \name{extract_dontrun_content}
 \alias{extract_dontrun_content}
-\title{Extract Content Inside \\dontrun{} Blocks}
+\title{Extract Content Inside \\dontrun{} Blocks (FIXED VERSION)}
 \usage{
-extract_dontrun_content(content)
-
 extract_dontrun_content(content)
 }
 \arguments{
-\item{content}{Character. Clean content without comment markers}
+\item{content}{Character. Content containing dontrun blocks}
 }
 \value{
 Character. Content inside dontrun blocks
-
-Character. Content inside dontrun blocks
 }
 \description{
-Extract Content Inside \\dontrun{} Blocks
-
-Extract Content Inside \\dontrun{} Blocks
+Extract Content Inside \\dontrun{} Blocks (FIXED VERSION)
 }
