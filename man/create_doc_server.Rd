@@ -2,27 +2,14 @@
 % Please edit documentation in R/updated_shiny_server.r
 \name{create_doc_server}
 \alias{create_doc_server}
-\title{Create the Shiny Server for Documentation Assistant (Updated)}
+\title{Create Clean Shiny Server for Documentation Assistant}
 \usage{
 create_doc_server()
-}
-\arguments{
-\item{path}{Character. Path to check (default: ".")}
 }
 \value{
 Shiny server function
 }
 \description{
 Creates the server logic for the R Documentation Assistant Shiny application
-with proper integration of enhanced dependency analysis.
-}
-\examples{
-\dontrun{
-# Check current directory
-check_r_files()
-
-# Check specific package
-check_r_files("/path/to/package")
-}
-
+with fixed syntax and proper integration with current functions.
 }

@@ -1,20 +1,50 @@
-## Vibe-coding an R package: thoughts along the journey
+## Vibe-coding an R package: fun until it's not
 
-This is my first vibe-coding project. I tried to not look into any function details even if I know how to fix, but force myself to do prompt-based coding only. It is a very interesting and educational experience...
+This was my first vibe-coding project: forcing myself to code only through prompts, without diving into function details even when I knew how to fix them. It ended up taking a good portion of small pocket time across four days... Why am I doing this? I’m sure vibe-coding is picking up steam among professional programmers, but for students in statistics and data science, there isn’t much guidance out there. Definitely no textbook :) So I figured why not. I can’t judge it unless I seriously try it, so here it goes.
 
-I used Claude Sonnet 4 as my AI assistant. It is certainly also a vibe-based choice. I am sure experience with other LLMs will be different but somehow similar in broad strokes.
+I used Claude Sonnet 4 as my coding partner. A vibe choice, for sure. Other LLMs may behave differently, but broadly speaking, the experience would be similar. My task was simple: clean up an R package our group had been building fast without careful documentation. I already knew how to get the job done, either hours of boring copy-pasting or a regex-heavy bash script. Instead, I thought: why not make an R package that helps me clean up R packages?
 
-To start, Claude was very quick and effective in building a shiny dashboard to visualize things that I want to see in the package: what functions are their, dependencies, missing documents, etc. That takes only a couple minutes, everything seems great...
+In the pre-AI dark era, this may be something that's perfect for a student project (poor soul!). It could be a useful project, and could be a good learning experience for students. But it's not a great project since it's very software engineering focused, and not super useful for stat/DS students. (Note: whether it's actually useful is debatable, but I guess not useful in terms of the conventional criterion we use to evaluate stats/DS students.)  
 
-Then I start to demand more (i.e., what many of us would do when identifying a great students...) and ask for more complicated tasks. But unlike talking to a student, I can shameless ask for tedious tasks that I don't want waste my time on! There are many hacky things in building R packages that one typically do as they add functions and methods (e.g., checking the dependencies are correctly imported, fake global variable complaints from R Check are dealt with, documentations, etc.) I happily described them to Claude. Claude understands the issues immediately. This is great! When talking to a real person, unless the person is an R package experts, explaining what's going on and what needs to be done can take a very long time. 
+Alright, so I start chatting with Claude. At first, it was great. Claude quickly spun up a Shiny dashboard to visualize package structure in minutes. A supercharged student went into the most hairy task without hesitation, Claude understood the most tedious and vague tasks immediately and produced polished solutions.
 
-Then Claude starts to add functions to implement the hacks (more on the readme file, after I get them to work). The danger of vibe coding starts to surface: the functions are written professionally with edge case handling and fail safes and useful messages, but they are very long! It soon becomes impossible to read the whole functions. And what's worse is that as the tasks become more complicated, the functions do not always work out of the gate. Now I am doing real vibe coding. I'm seeing the results, describing what's wrong, and brainlessly copy pasting the updated functions without thinking. I got some functionalities implemented fine in this way. It's not fast any more. An hour easily slipped away implementing a single functionality resolving some global variable check errors. For sure, I can manually edit the package to fix those issues in ten minutes, but the idea is to create something that can be reused later. Still, it's a lot faster than me trying to figure out the right regex to parse the R check notes...
+But then the dark side showed up. Functions became long, unreadable, and fragile. Debugging turned into a cycle of copy–paste–prompt–repeat. What should’ve been a 10-minute manual fix ballooned into an hour-long back-and-forth. Claude is more thoughtful than me (or any student) at anticipating edge cases, but many of those edge cases were things that would almost never happen in real R code.
 
-But more problems arise. Claude initially set up an R6 object, which is super nice and modern, but as tasks accumulate, the main R6 code script needs to be updated constantly. Sometimes new mistakes are generated, and regenerating that file becomes time-consuming. Again, common problem when coding, functions become too big to deal with effectively. 
+There are some things I learned through reading Claude's codes too, e.g., R6. But overall, the system Claude set up becomes too heavy to realistically handle, even by the AI. Small changes can trigger massive function updates and I quickly hit rate and chat length limits. Eventually, I had to reset. I asked Claude for a restructuring: drop R6, rebuild as task-specific functions, etc. Then things become at least a bit more manageable. Even though I had to break my original plan and provide more specific prompt for code implementations inside functions to Claude, it starts to click a bit better...
 
-I finally decided to do a clean slate restart. I know there are many functionalities that have been tested already, but if I continue with this current codebase, there is no way I will come back doing anything else on it since it's totally unreadable...so it goes the prompt that I would rarely ask of a student lightly: _looking back at the whole project, the R6 implementation is really tedious and difficult to maintain in the future. Can you do a restructuring assessment to only use task-specific functions to achieve the same functionalities?_
+Long story short: I got everything I wanted done, and built a tool I might even reuse. From the outside it looks polished and well-documented. Inside… who knows. Some bugs are still lurking, but at this point I don’t really need them fixed. I cleaned up the README just enough for future me, and wrote this piece...
 
-A few minutes later, I have a full set of functions that does roughly the same thing based on names, but with completely different organizations! Great...but more debugging as things are not perfect. Many more conversations, and I have to come up with the right logic to check, rather than let Claude completely freestyle. For example, one of the task was to create roxygen template for any undocumented functions. Claude correctly implemented the idea, except that it creates the roxygen comments for internal functions too, which I do not want (or at least, would like to be able to toggle off). So I asked Claude to toggle off nested functions. It tried to implement it through three separate checks based on guesswork (line number, naming convention, etc.). I had to tell Claude to check for @export tag and only add template for exported functions -- something very intuitive for experienced R users, but I guess it's a very language-specific thing that does not come up as the first approach to take for Claude. Anyway, the experience is not too bad: you basically still need to know what you want to do and need to be able to describe it! That's not a bad skill to have... 
+A few thoughts after the vibekathon:
+
+- _Will I use AI to vibe code in the future?_ Definitely. If I was trying to only solve my original problem at hand without creating a slightly more general tool, it could be done super fast. There are many situations in academic research that involves `dirty work' that needs to be done, but doing it manually takes about the same time as writing an automatic script from scratch. Now with AI, such utility scripts can be written instantly. This is especially useful for tasks where manual checking the correctness of the output is fast (so less concern about accuracy/hallucination).
+
+- _Will I use AI to vibe-code a large project?_ Probably not, at least not with my current vibe-coding skills. Many things can be done better than this attempt of course. For example, I can have a clear design of the project and let AI implement specific pieces instead of letting it freestyle. I may save myself a lot of trouble by using an actual AI agent that can implement the codes and iterate based on outputs. I may benefit by watching a few youtube vibe-coding tutorials than starting blank, etc. But after all, for a large project that I care about, I will need to be able to read and maintain the code base. I will want to implement methods and functions using the styles and habits that I am most comfortable with so that I can continuously maintain them, even after not looking at them for a long while. Of course, maybe AI tools will become better and can learn from how I code and mimic? It may also be useful to have AI rewrite my own old codes using my current style?
+
+- _What should I tell students to do?_ I think we are at a point where banning AI is not an option. It will similar to requiring hand-written papers when computers exist. But the challenges I encountered are likely going to be experienced by students too. The concern is always whether students can realize these issues on their own? Or will they be simply happy that something is returned and seems reasonable? I think it is important for all students to try vibe-coding at some point, but engage with the AI assistant deeply to make sure they understand what is happening under the hood. I think AI does opens up a wonderful opportunity for students to think more about **designing** their codes rather than memorizing detailed syntax (relatively, knowing syntax is important of course!), especially for stats/DS students who are not traditionally trained in a coding-heavy way. Of course, the real challenge is how to convey all these to students, especially undergrads who are just starting. In some sense, this is probably more difficult than teaching students to write with a pen when they can type?
+
+- I think for advanced/grad students, again, I'm thinking about stats/DS students whose job/research involves a lot of detective work, knowing how to vibe-code is important. Used well, it can save a lot of time and let you focus on reasoning and the parts that really matter, instead of being drowned in the tedious details of data investigation. Regardless of how you feel about AI, it’s here to stay, so why not make it useful for yourself?
 
 
-Still not fully done, but getting there...
+PS: One last thing AI can do for me in this repository: these thoughts were polished by ChatGPT for language. I asked chatGPT to maintain my original tune and had to undo some of the optimistic spins after it's polishing. But if there is anything that you don't like, I'll blame ChatGPT! :)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

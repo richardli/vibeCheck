@@ -2,17 +2,17 @@
 % Please edit documentation in R/vibecheck_wrapper.r
 \name{vibecheck}
 \alias{vibecheck}
-\title{VibeCheck: Complete Package Analysis and Fixes}
+\title{VibeCheck: Complete Package Analysis and Fixes (CORRECTED)}
 \usage{
 vibecheck(
-  path = ".",
+  path = NULL,
   fix_issues = TRUE,
   include_dependencies = TRUE,
   verbose = TRUE
 )
 }
 \arguments{
-\item{path}{Character. Path to package directory (default: ".")}
+\item{path}{Character. Path to package directory (default: auto-detect from current directory)}
 
 \item{fix_issues}{Logical. Whether to interactively fix found issues (default: TRUE)}
 
@@ -25,12 +25,11 @@ List with complete package analysis results
 }
 \description{
 Main wrapper function that provides a comprehensive analysis of an R package
-and offers to fix common R CMD check issues. This is the primary entry point
-for the vibeCheck functionality.
+and offers to fix common R CMD check issues. Updated with smart path detection.
 }
 \examples{
 \dontrun{
-# Complete package analysis with interactive fixes
+# Auto-detect package from current directory
 result <- vibecheck()
 
 # Analysis only, no fixes

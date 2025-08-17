@@ -2,12 +2,12 @@
 % Please edit documentation in R/package_analysis.r
 \name{analyze_package}
 \alias{analyze_package}
-\title{Analyze R Package Structure and Functions}
+\title{Analyze R Package Structure and Functions (UPDATED)}
 \usage{
-analyze_package(path = ".", include_dependencies = FALSE, verbose = TRUE)
+analyze_package(path = NULL, include_dependencies = FALSE, verbose = TRUE)
 }
 \arguments{
-\item{path}{Character. Path to package directory (default: ".")}
+\item{path}{Character. Path to package directory (default: auto-detect)}
 
 \item{include_dependencies}{Logical. Whether to analyze dependencies (default: FALSE)}
 
@@ -18,12 +18,12 @@ List with package analysis results
 }
 \description{
 Main function to analyze an R package, extracting functions, documentation,
-dependencies, and other metadata. Returns a simple list structure.
+dependencies, and other metadata. Now with smart path detection.
 Updated to handle both .R and .r file extensions.
 }
 \examples{
 \dontrun{
-# Analyze current package
+# Auto-detect and analyze current package
 pkg_info <- analyze_package()
 
 # Analyze specific package

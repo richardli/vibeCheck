@@ -2,17 +2,17 @@
 % Please edit documentation in R/complete_dependency_analysis.r
 \name{analyze_package_dependencies}
 \alias{analyze_package_dependencies}
-\title{Analyze Package Dependencies}
+\title{Analyze Package Dependencies (FIXED)}
 \usage{
 analyze_package_dependencies(
-  package_path,
+  package_path = NULL,
   functions_data = NULL,
   verbose = TRUE,
   include_suggests = FALSE
 )
 }
 \arguments{
-\item{package_path}{Character. Path to package root}
+\item{package_path}{Character. Path to package root (default: auto-detect)}
 
 \item{functions_data}{Data.frame. Function data from scan_r_functions}
 
@@ -26,19 +26,19 @@ List with dependency analysis results including function-level tracking
 \description{
 Comprehensive dependency analysis including DESCRIPTION file parsing,
 code scanning for package usage, and missing package detection.
-Enhanced with function-level dependency tracking and better detection.
+Enhanced with function-level dependency tracking and smart path detection.
 }
 \examples{
 \dontrun{
-# Analyze dependencies for current package
-deps <- analyze_package_dependencies(".")
+# Auto-detect and analyze dependencies for current package
+deps <- analyze_package_dependencies()
 
 # With existing function data
-functions <- scan_r_functions(".")
-deps <- analyze_package_dependencies(".", functions)
+functions <- scan_r_functions()
+deps <- analyze_package_dependencies(functions_data = functions)
 
 # Include suggests packages in unused check
-deps <- analyze_package_dependencies(".", include_suggests = TRUE)
+deps <- analyze_package_dependencies(include_suggests = TRUE)
 }
 
 }

@@ -1,7 +1,7 @@
-#' Create the Shiny UI for Documentation Assistant (Functional Version)
+#' Create Updated Shiny UI for Documentation Assistant
 #'
 #' Creates the user interface for the R Documentation Assistant Shiny application
-#' updated to work with the new functional architecture.
+#' updated to work with the current function architecture and optimized performance.
 #'
 #' @return Shiny UI object
 #' @export
@@ -13,17 +13,23 @@ create_doc_ui <- function() {
       shinydashboard::sidebarMenu(
         shinydashboard::menuItem("Functions", tabName = "functions", icon = shiny::icon("code")),
         shinydashboard::menuItem("Dependencies", tabName = "dependencies", icon = shiny::icon("puzzle-piece")),
-        shinydashboard::menuItem("Namespace", tabName = "namespace", icon = shiny::icon("link")),
+        shinydashboard::menuItem("Documentation", tabName = "documentation", icon = shiny::icon("file-text")),
+        shinydashboard::menuItem("Package Analysis", tabName = "analysis", icon = shiny::icon("chart-bar")),
         shinydashboard::menuItem("R CMD Check", tabName = "cmdcheck", icon = shiny::icon("check-circle")),
         shinydashboard::menuItem("Settings", tabName = "settings", icon = shiny::icon("cog"))
       ),
       
       shiny::br(),
       shiny::div(style = "margin: 10px;",
-        shiny::h4("Package Info"),
+        shiny::h4("Package Controls"),
         shiny::textInput("package_path", "Package Path:", value = ".", width = "100%"),
-        shiny::actionButton("reload_package", "Reload Package", class = "btn-primary", width = "100%"),
-        shiny::br(), shiny::br(),
+        shiny::div(style = "display: flex; gap: 5px; margin-bottom: 10px;",
+          shiny::actionButton("quick_check", "Quick Check", class = "btn-warning btn-sm", style = "flex: 1;"),
+          shiny::actionButton("reload_package", "Full Analysis", class = "btn-primary btn-sm", style = "flex: 1;")
+        ),
+        shiny::checkboxInput("fast_mode", "Fast Mode (no dependencies)", value = TRUE),
+        shiny::checkboxInput("skip_dependencies", "Skip Dependencies (faster)", value = FALSE),
+        shiny::br(),
         shiny::verbatimTextOutput("package_summary")
       )
     ),
@@ -34,6 +40,10 @@ create_doc_ui <- function() {
           .ace_editor { font-size: 12px !important; }
           .content-wrapper, .right-side { background-color: #f4f4f4; }
           .small-box { margin-bottom: 10px; }
+          .btn-sm { padding: 4px 8px; font-size: 12px; }
+          .status-good { color: #00a65a; font-weight: bold; }
+          .status-warning { color: #f39c12; font-weight: bold; }
+          .status-error { color: #dd4b39; font-weight: bold; }
         "))
       ),
       
@@ -43,44 +53,54 @@ create_doc_ui <- function() {
         shinydashboard::tabItem(tabName = "functions",
           shiny::fluidRow(
             shinydashboard::box(title = "Functions Overview", status = "primary", solidHeader = TRUE, width = 12,
-              DT::dataTableOutput("functions_table")
-            )
-          ),
-          
-          shiny::fluidRow(
-            shinydashboard::box(title = "Function Details", status = "info", solidHeader = TRUE, width = 6,
-              shinyAce::aceEditor("function_code", 
-                       mode = "r", 
-                       theme = "github",
-                       height = "200px",
-                       readOnly = TRUE,
-                       fontSize = 12),
-              shiny::br(),
-              shiny::h5("Bulk Documentation"),
-              shiny::checkboxInput("save_bulk_docs", "Save templates to files", value = FALSE),
-              shiny::actionButton("generate_bulk_docs", "Generate All Missing Docs", 
-                          class = "btn-info", icon = shiny::icon("magic"))
-            ),
-            
-            shinydashboard::box(title = "Documentation Editor", status = "warning", solidHeader = TRUE, width = 6,
-              shinyAce::aceEditor("docs_editor", 
-                       mode = "text", 
-                       theme = "github",
-                       height = "350px",
-                       fontSize = 12),
+              DT::dataTableOutput("functions_table"),
               shiny::br(),
               shiny::div(style = "text-align: right;",
-                shiny::actionButton("save_docs", "Save Documentation", 
-                            class = "btn-success", icon = shiny::icon("save")),
-                shiny::actionButton("auto_template", "Generate Template", 
-                            class = "btn-info", icon = shiny::icon("magic"))
+                shiny::actionButton("refresh_functions", "Refresh", class = "btn-info btn-sm", icon = shiny::icon("refresh"))
               )
             )
           ),
           
           shiny::fluidRow(
-            shinydashboard::box(title = "Parameter Suggestions", status = "success", solidHeader = TRUE, width = 12,
-              shiny::verbatimTextOutput("param_suggestions")
+            shinydashboard::box(title = "Function Code & Documentation Viewer", status = "info", solidHeader = TRUE, width = 8,
+              shiny::h5("Selected Function Code:"),
+              shinyAce::aceEditor("code_viewer", 
+                       mode = "r", 
+                       theme = "github",
+                       height = "300px",
+                       fontSize = 11,
+                       readOnly = TRUE,
+                       placeholder = "Select a function to view its code..."),
+              shiny::br(),
+              shiny::h5("Existing Documentation:"),
+              shinyAce::aceEditor("existing_docs_viewer", 
+                       mode = "text", 
+                       theme = "github",
+                       height = "200px",
+                       fontSize = 11,
+                       readOnly = TRUE,
+                       placeholder = "Existing roxygen documentation will appear here...")
+            ),
+            
+            shinydashboard::box(title = "Documentation Editor", status = "warning", solidHeader = TRUE, width = 4,
+              shiny::verbatimTextOutput("selected_function_info"),
+              shiny::br(),
+              shiny::h5("Quick Actions"),
+              shiny::div(style = "display: flex; flex-direction: column; gap: 5px;",
+                shiny::actionButton("generate_template", "Generate Template", class = "btn-info btn-sm", width = "100%"),
+                shiny::actionButton("save_selected_docs", "Save Documentation", class = "btn-success btn-sm", width = "100%")
+              ),
+              shiny::br(),
+              shinyAce::aceEditor("docs_editor", 
+                       mode = "text", 
+                       theme = "github",
+                       height = "350px",
+                       fontSize = 12,
+                       placeholder = "Select a function to edit documentation..."),
+              shiny::br(),
+              shiny::div(style = "text-align: right;",
+                shiny::checkboxInput("create_backup", "Create backup", value = TRUE, width = "auto")
+              )
             )
           )
         ),
@@ -88,39 +108,139 @@ create_doc_ui <- function() {
         # Dependencies Tab  
         shinydashboard::tabItem(tabName = "dependencies",
           shiny::fluidRow(
-            shinydashboard::box(title = "Dependencies Summary", status = "primary", solidHeader = TRUE, width = 12,
+            shinydashboard::box(title = "Quick Dependency Check", status = "primary", solidHeader = TRUE, width = 12,
+              shiny::div(style = "display: flex; gap: 10px; align-items: center; margin-bottom: 10px;",
+                shiny::actionButton("check_dependencies", "Check Dependencies", class = "btn-primary"),
+                shiny::actionButton("detailed_dep_analysis", "Detailed Analysis", class = "btn-info"),
+                shiny::checkboxInput("include_suggests", "Include Suggests", value = FALSE)
+              ),
               shiny::verbatimTextOutput("dependencies_summary")
             )
           ),
           
           shiny::fluidRow(
-            shinydashboard::box(title = "Missing Packages", status = "danger", solidHeader = TRUE, width = 12,
+            shinydashboard::box(title = "Missing Packages", status = "danger", solidHeader = TRUE, width = 6,
               shiny::verbatimTextOutput("missing_packages"),
               shiny::br(),
               shiny::div(style = "text-align: center;",
-                shiny::actionButton("install_missing", "Install Missing Packages", 
-                            class = "btn-danger", icon = shiny::icon("download"))
+                shiny::actionButton("install_missing", "Install Missing", class = "btn-danger", icon = shiny::icon("download"))
               )
+            ),
+            
+            shinydashboard::box(title = "Package Usage Analysis", status = "info", solidHeader = TRUE, width = 6,
+              shiny::selectInput("analyze_package", "Analyze package usage:", choices = c("Select package..." = ""), width = "100%"),
+              shiny::actionButton("analyze_pkg_usage", "Analyze Usage", class = "btn-info"),
+              shiny::br(), shiny::br(),
+              shiny::verbatimTextOutput("package_usage_report")
+            )
+          ),
+          
+          shiny::fluidRow(
+            shinydashboard::box(title = "Namespace Conversion", status = "success", solidHeader = TRUE, width = 12,
+              shiny::div(style = "display: flex; gap: 10px; align-items: center; margin-bottom: 10px;",
+                shiny::actionButton("check_namespace", "Check Opportunities", class = "btn-info"),
+                shiny::actionButton("preview_namespace", "Preview Changes", class = "btn-warning"),
+                shiny::actionButton("apply_namespace", "Apply Conversion", class = "btn-success")
+              ),
+              shiny::verbatimTextOutput("namespace_report")
             )
           )
         ),
         
-        # Namespace Tab
-        shinydashboard::tabItem(tabName = "namespace",
+        # Documentation Tab
+        shinydashboard::tabItem(tabName = "documentation",
           shiny::fluidRow(
-            shinydashboard::box(title = "Namespace Conversion Overview", status = "primary", solidHeader = TRUE, width = 12,
-              shiny::verbatimTextOutput("namespace_summary"),
+            shinydashboard::box(title = "Bulk Documentation Generation", status = "primary", solidHeader = TRUE, width = 12,
+              shiny::h4("Generate Documentation Templates"),
+              shiny::div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;",
+                shiny::div(
+                  shiny::h5("Basic Options"),
+                  shiny::checkboxInput("save_bulk_docs", "Save to files", value = FALSE),
+                  shiny::checkboxInput("exported_only", "Exported functions only", value = TRUE),
+                  shiny::checkboxInput("backup_files", "Create backups", value = TRUE)
+                ),
+                shiny::div(
+                  shiny::h5("Template Type"),
+                  shiny::radioButtons("template_type", NULL,
+                    choices = list(
+                      "Standard export" = "exported",
+                      "Internal function" = "internal",
+                      "Basic template" = "standard"
+                    ),
+                    selected = "exported"
+                  )
+                )
+              ),
+              shiny::actionButton("generate_bulk_docs", "Generate All Missing Docs", 
+                        class = "btn-primary", icon = shiny::icon("magic")),
+              shiny::br(), shiny::br(),
+              shiny::verbatimTextOutput("bulk_docs_result")
+            )
+          ),
+          
+          shiny::fluidRow(
+            shinydashboard::box(title = "Custom Example Templates", status = "warning", solidHeader = TRUE, width = 12,
+              shiny::h4("Add Custom Examples to Functions"),
+              shiny::p("Use [FUNCNAME] as placeholder for the function name in your template."),
+              shiny::textAreaInput("example_template", 
+                          "Example Template:",
+                          value = "data <- ...\nresult <- [FUNCNAME](data)",
+                          height = "100px",
+                          width = "100%"),
+              shiny::div(style = "display: flex; gap: 10px; align-items: center; margin-bottom: 10px;",
+                shiny::textInput("specific_functions", "Specific functions (comma-separated, leave empty for all):", 
+                        placeholder = "func1, func2, func3", width = "300px"),
+                shiny::checkboxInput("preview_examples", "Preview only", value = TRUE)
+              ),
+              shiny::actionButton("add_custom_examples", "Add Examples", class = "btn-warning", icon = shiny::icon("plus")),
+              shiny::br(), shiny::br(),
+              shiny::verbatimTextOutput("examples_result")
+            )
+          ),
+          
+          shiny::fluidRow(
+            shinydashboard::box(title = "Documentation Analysis", status = "info", solidHeader = TRUE, width = 12,
+              shiny::div(style = "display: flex; gap: 10px; margin-bottom: 10px;",
+                shiny::actionButton("check_missing_examples", "Check Missing Examples", class = "btn-info"),
+                shiny::actionButton("check_export_status", "Check Export Status", class = "btn-info")
+              ),
+              shiny::verbatimTextOutput("doc_analysis_result")
+            )
+          )
+        ),
+        
+        # Package Analysis Tab
+        shinydashboard::tabItem(tabName = "analysis",
+          shiny::fluidRow(
+            shinydashboard::box(title = "Package Statistics", status = "primary", solidHeader = TRUE, width = 6,
+              shiny::verbatimTextOutput("detailed_stats")
+            ),
+            
+            shinydashboard::box(title = "Analysis Options", status = "info", solidHeader = TRUE, width = 6,
+              shiny::h5("Analysis Mode"),
+              shiny::radioButtons("analysis_mode", NULL,
+                choices = list(
+                  "Ultra Fast (basic checks only)" = "ultra_fast",
+                  "Fast (optimized analysis)" = "fast", 
+                  "Full (comprehensive analysis)" = "full"
+                ),
+                selected = "fast"
+              ),
               shiny::br(),
-              shiny::div(style = "text-align: center;",
-                shiny::actionButton("apply_namespace", "Apply Namespace Conversion", 
-                            class = "btn-primary", icon = shiny::icon("link"))
+              shiny::actionButton("run_analysis", "Run Analysis", class = "btn-primary"),
+              shiny::br(), shiny::br(),
+              shiny::h5("Quick Actions"),
+              shiny::div(style = "display: flex; flex-direction: column; gap: 5px;",
+                shiny::actionButton("extract_functions_action", "Extract Package Functions", class = "btn-info btn-sm"),
+                shiny::actionButton("analyze_dependencies_action", "Analyze Dependencies", class = "btn-info btn-sm"),
+                shiny::actionButton("build_param_history", "Build Parameter History", class = "btn-info btn-sm")
               )
             )
           ),
           
           shiny::fluidRow(
-            shinydashboard::box(title = "Detailed Namespace Analysis", status = "info", solidHeader = TRUE, width = 12,
-              shiny::verbatimTextOutput("namespace_report")
+            shinydashboard::box(title = "Analysis Results", status = "success", solidHeader = TRUE, width = 12,
+              shiny::verbatimTextOutput("analysis_results")
             )
           )
         ),
@@ -128,33 +248,32 @@ create_doc_ui <- function() {
         # R CMD Check Tab
         shinydashboard::tabItem(tabName = "cmdcheck",
           shiny::fluidRow(
-            shinydashboard::box(title = "Fix Global Variables", status = "warning", solidHeader = TRUE, width = 6,
-              shiny::p(shiny::textOutput("global_vars_help")),
+            shinydashboard::box(title = "Global Variables Fix", status = "warning", solidHeader = TRUE, width = 6,
+              shiny::p("Paste R CMD check output containing 'no visible binding for global variable' errors:"),
               shiny::textAreaInput("global_vars_input", 
                           label = NULL,
-                          placeholder = "Paste R CMD check output here...",
+                          placeholder = "myfunction: no visible binding for global variable 'x'\nUndefined global functions or variables:\n  x y_var weighted_value",
                           height = "150px",
                           width = "100%"),
-              shiny::checkboxInput("preview_global_vars", "Preview only", value = TRUE),
-              shiny::actionButton("fix_global_vars", "Fix Global Variables", 
-                          class = "btn-warning", icon = shiny::icon("wrench"))
+              shiny::div(style = "display: flex; gap: 10px; align-items: center;",
+                shiny::checkboxInput("preview_global_vars", "Preview only", value = TRUE),
+                shiny::actionButton("fix_global_vars", "Fix Global Variables", class = "btn-warning")
+              ),
+              shiny::verbatimTextOutput("global_vars_result")
             ),
             
-            shinydashboard::box(title = "Fix Non-ASCII Characters", status = "danger", solidHeader = TRUE, width = 6,
-              shiny::p(shiny::textOutput("non_ascii_help")),
-              shiny::textAreaInput("non_ascii_input", 
-                          label = NULL,
-                          placeholder = "Paste R CMD check output here...",
-                          height = "150px",
-                          width = "100%"),
-              shiny::checkboxInput("preview_non_ascii", "Preview only", value = TRUE),
-              shiny::actionButton("fix_non_ascii", "Fix Non-ASCII Characters", 
-                          class = "btn-danger", icon = shiny::icon("wrench"))
+            shinydashboard::box(title = "Custom Examples Management", status = "info", solidHeader = TRUE, width = 6,
+              shiny::h5("Detect Missing Examples"),
+              shiny::actionButton("detect_missing_examples", "Check Missing Examples", class = "btn-info"),
+              shiny::br(), shiny::br(),
+              shiny::h5("Fix Empty Examples"),
+              shiny::p("Use the Documentation tab for adding custom examples to functions."),
+              shiny::verbatimTextOutput("examples_check_result")
             )
           ),
           
           shiny::fluidRow(
-            shinydashboard::box(title = "R CMD Check Help", status = "info", solidHeader = TRUE, width = 12,
+            shinydashboard::box(title = "R CMD Check Help", status = "success", solidHeader = TRUE, width = 12,
               shiny::h4("How to use R CMD Check fixes:"),
               shiny::tags$ol(
                 shiny::tags$li("Run ", shiny::code("R CMD check"), " on your package"),
@@ -164,11 +283,21 @@ create_doc_ui <- function() {
                 shiny::tags$li("Uncheck 'Preview only' and click the fix button to apply changes")
               ),
               shiny::br(),
-              shiny::h5("Supported fixes:"),
+              shiny::h5("Available fixes:"),
               shiny::tags$ul(
-                shiny::tags$li(shiny::strong("Global Variables:"), " Fixes 'no visible binding for global variable' errors"),
-                shiny::tags$li(shiny::strong("Non-ASCII Characters:"), " Fixes 'non-ASCII characters' errors"),
-                shiny::tags$li(shiny::strong("Empty Examples:"), " Use ", shiny::code("fix_empty_examples()"), " function directly")
+                shiny::tags$li(shiny::strong("Global Variables:"), " Automatically creates utils::globalVariables() declarations"),
+                shiny::tags$li(shiny::strong("Missing Examples:"), " Use the Documentation tab to add examples"),
+                shiny::tags$li(shiny::strong("Export Status:"), " Check which functions are exported in NAMESPACE")
+              ),
+              shiny::br(),
+              shiny::h5("Command Line Usage:"),
+              shiny::div(style = "font-family: monospace; background-color: #f8f9fa; padding: 10px; border-radius: 5px;",
+                "# Quick package check", shiny::br(),
+                "quick_package_check()", shiny::br(), shiny::br(),
+                "# Full interactive analysis", shiny::br(),
+                "vibecheck()", shiny::br(), shiny::br(),
+                "# Fix global variables", shiny::br(),
+                'extract_and_update_globals(check_output)', shiny::br()
               )
             )
           )
@@ -177,60 +306,97 @@ create_doc_ui <- function() {
         # Settings Tab
         shinydashboard::tabItem(tabName = "settings",
           shiny::fluidRow(
-            shinydashboard::box(title = "Package Statistics", status = "primary", solidHeader = TRUE, width = 6,
-              shiny::verbatimTextOutput("detailed_stats")
+            shinydashboard::box(title = "Performance Settings", status = "primary", solidHeader = TRUE, width = 6,
+              shiny::h5("Analysis Performance"),
+              shiny::radioButtons("default_analysis_mode", "Default analysis mode:",
+                choices = list(
+                  "Ultra Fast" = "ultra_fast",
+                  "Fast (Recommended)" = "fast", 
+                  "Full Analysis" = "full"
+                ),
+                selected = "fast"
+              ),
+              shiny::checkboxInput("auto_dependency_check", "Auto-check dependencies", value = FALSE),
+              shiny::checkboxInput("verbose_output", "Verbose output", value = TRUE),
+              shiny::br(),
+              shiny::actionButton("save_settings", "Save Settings", class = "btn-primary")
             ),
             
-            shinydashboard::box(title = "Available Functions", status = "info", solidHeader = TRUE, width = 6,
-              shiny::h5("Core Analysis Functions:"),
+            shinydashboard::box(title = "Package Information", status = "info", solidHeader = TRUE, width = 6,
+              shiny::h5("Current Package:"),
+              shiny::verbatimTextOutput("current_package_info"),
+              shiny::br(),
+              shiny::h5("Available Functions"),
+              shiny::p("You can use these functions directly in the R console:"),
               shiny::tags$ul(
-                shiny::tags$li(shiny::code("analyze_package()")),
-                shiny::tags$li(shiny::code("scan_r_functions()")),
-                shiny::tags$li(shiny::code("analyze_package_dependencies()")),
-                shiny::tags$li(shiny::code("build_parameter_history()"))
-              ),
-              
-              shiny::h5("Documentation Functions:"),
-              shiny::tags$ul(
-                shiny::tags$li(shiny::code("generate_roxygen_template()")),
-                shiny::tags$li(shiny::code("save_function_docs()")),
-                shiny::tags$li(shiny::code("generate_bulk_documentation()"))
-              ),
-              
-              shiny::h5("R CMD Check Fixes:"),
-              shiny::tags$ul(
-                shiny::tags$li(shiny::code("fix_global_variables()")),
-                shiny::tags$li(shiny::code("fix_non_ascii_characters()")),
-                shiny::tags$li(shiny::code("fix_empty_examples()"))
-              ),
-              
-              shiny::h5("Namespace Functions:"),
-              shiny::tags$ul(
-                shiny::tags$li(shiny::code("analyze_namespace_usage()")),
-                shiny::tags$li(shiny::code("apply_namespace_conversion()"))
+                shiny::tags$li(shiny::code("vibecheck()"), " - Complete package analysis"),
+                shiny::tags$li(shiny::code("quick_package_check()"), " - Fast package check"),
+                shiny::tags$li(shiny::code("analyze_package_fast()"), " - Optimized analysis"),
+                shiny::tags$li(shiny::code("launch_doc_app()"), " - Launch this Shiny app")
               )
             )
           ),
           
           shiny::fluidRow(
-            shinydashboard::box(title = "Quick Actions", status = "success", solidHeader = TRUE, width = 12,
-              shiny::p("Use these functions directly in the R console for command-line usage:"),
-              shiny::br(),
-              shiny::div(style = "font-family: monospace; background-color: #f8f9fa; padding: 10px; border-radius: 5px;",
-                "# Complete package analysis", shiny::br(),
-                "vibecheck()", shiny::br(), shiny::br(),
-                
-                "# Quick check without fixes", shiny::br(),
-                "quick_package_check()", shiny::br(), shiny::br(),
-                
-                "# Individual analyses", shiny::br(),
-                "pkg_info <- analyze_package()", shiny::br(),
-                "deps <- analyze_package_dependencies('.')", shiny::br(),
-                "namespace_opps <- analyze_namespace_usage('.')", shiny::br(), shiny::br(),
-                
-                "# Generate documentation", shiny::br(),
-                "template <- generate_roxygen_template('my_func', list(x = NULL))", shiny::br(),
-                "bulk_docs <- generate_bulk_documentation(pkg_info)"
+            shinydashboard::box(title = "Function Reference", status = "success", solidHeader = TRUE, width = 12,
+              shiny::h5("Core Analysis Functions:"),
+              shiny::div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 20px;",
+                shiny::div(
+                  shiny::h6("Fast Functions (Recommended):"),
+                  shiny::tags$ul(
+                    shiny::tags$li(shiny::code("analyze_package_fast()")),
+                    shiny::tags$li(shiny::code("analyze_dependencies_fast()")),
+                    shiny::tags$li(shiny::code("quick_package_check()")),
+                    shiny::tags$li(shiny::code("parse_function_docs_fast()"))
+                  )
+                ),
+                shiny::div(
+                  shiny::h6("Full Functions:"),
+                  shiny::tags$ul(
+                    shiny::tags$li(shiny::code("analyze_package()")),
+                    shiny::tags$li(shiny::code("analyze_package_dependencies()")),
+                    shiny::tags$li(shiny::code("extract_package_functions()")),
+                    shiny::tags$li(shiny::code("generate_package_usage_report()"))
+                  )
+                )
+              ),
+              
+              shiny::h5("Documentation Functions:"),
+              shiny::div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 20px;",
+                shiny::div(
+                  shiny::tags$ul(
+                    shiny::tags$li(shiny::code("generate_roxygen_template()")),
+                    shiny::tags$li(shiny::code("generate_bulk_documentation()")),
+                    shiny::tags$li(shiny::code("add_custom_examples()")),
+                    shiny::tags$li(shiny::code("save_function_docs()"))
+                  )
+                ),
+                shiny::div(
+                  shiny::tags$ul(
+                    shiny::tags$li(shiny::code("detect_missing_examples()")),
+                    shiny::tags$li(shiny::code("update_examples_only()")),
+                    shiny::tags$li(shiny::code("check_export_status()")),
+                    shiny::tags$li(shiny::code("get_exported_functions()"))
+                  )
+                )
+              ),
+              
+              shiny::h5("Utility Functions:"),
+              shiny::div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 20px;",
+                shiny::div(
+                  shiny::tags$ul(
+                    shiny::tags$li(shiny::code("extract_and_update_globals()")),
+                    shiny::tags$li(shiny::code("analyze_namespace_usage()")),
+                    shiny::tags$li(shiny::code("apply_namespace_conversion()"))
+                  )
+                ),
+                shiny::div(
+                  shiny::tags$ul(
+                    shiny::tags$li(shiny::code("install_missing_packages()")),
+                    shiny::tags$li(shiny::code("scan_r_functions()")),
+                    shiny::tags$li(shiny::code("detect_package_root()"))
+                  )
+                )
               )
             )
           )
@@ -238,65 +404,4 @@ create_doc_ui <- function() {
       )
     )
   )
-}
-
-#' Launch the Documentation Assistant App (Updated)
-#'
-#' Launches the updated Shiny application using the functional architecture.
-#'
-#' @param package_path Character. Path to package (default: ".")
-#' @param port Integer. Port number (default: auto-select)
-#' @param host Character. Host address (default: "127.0.0.1")
-#' @param launch_browser Logical. Open browser automatically (default: TRUE)
-#'
-#' @return Starts Shiny application
-#' @export
-launch_doc_app <- function(package_path = ".", port = NULL, host = "127.0.0.1", launch_browser = TRUE) {
-  
-  # Check required packages
-  required_packages <- c("shiny", "shinyAce", "shinydashboard", "DT", "stringr", "purrr")
-  missing_packages <- c()
-  
-  for (pkg in required_packages) {
-    if (!requireNamespace(pkg, quietly = TRUE)) {
-      missing_packages <- c(missing_packages, pkg)
-    }
-  }
-  
-  if (length(missing_packages) > 0) {
-    stop("Missing required packages: ", paste(missing_packages, collapse = ", "), 
-         "\nPlease install them with: install.packages(c(", 
-         paste(paste0("'", missing_packages, "'"), collapse = ", "), "))")
-  }
-  
-  # Load required libraries
-  library(shiny)
-  library(shinydashboard)
-  library(shinyAce)
-  library(DT)
-  library(stringr)
-  library(purrr)
-  
-  cat("🚀 Launching VibeCheck Documentation Assistant...\n")
-  cat("Package path:", package_path, "\n\n")
-  
-  # Run quick check first
-  cat("Running quick package check...\n")
-  quick_package_check(package_path)
-  
-  # Create UI and server
-  ui <- create_doc_ui()
-  server <- create_doc_server()
-  
-  # Launch options
-  options <- list(
-    host = host,
-    launch.browser = launch_browser
-  )
-  
-  if (!is.null(port)) {
-    options$port <- port
-  }
-  
-  shiny::shinyApp(ui = ui, server = server, options = options)
 }

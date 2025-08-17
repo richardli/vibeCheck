@@ -2,7 +2,7 @@
 % Please edit documentation in R/updated_shiny_ui.r
 \name{create_doc_ui}
 \alias{create_doc_ui}
-\title{Create the Shiny UI for Documentation Assistant (Functional Version)}
+\title{Create Updated Shiny UI for Documentation Assistant}
 \usage{
 create_doc_ui()
 }
@@ -11,5 +11,5 @@ Shiny UI object
 }
 \description{
 Creates the user interface for the R Documentation Assistant Shiny application
-updated to work with the new functional architecture.
+updated to work with the current function architecture and optimized performance.
 }

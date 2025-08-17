@@ -1,10 +1,10 @@
-#' Analyze Package Dependencies
+#' Analyze Package Dependencies (FIXED)
 #'
 #' Comprehensive dependency analysis including DESCRIPTION file parsing,
 #' code scanning for package usage, and missing package detection.
-#' Enhanced with function-level dependency tracking and better detection.
+#' Enhanced with function-level dependency tracking and smart path detection.
 #'
-#' @param package_path Character. Path to package root
+#' @param package_path Character. Path to package root (default: auto-detect)
 #' @param functions_data Data.frame. Function data from scan_r_functions
 #' @param verbose Logical. Print progress messages
 #' @param include_suggests Logical. Whether to include Suggests packages in unused check (default: FALSE)
@@ -13,19 +13,24 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Analyze dependencies for current package
-#' deps <- analyze_package_dependencies(".")
+#' # Auto-detect and analyze dependencies for current package
+#' deps <- analyze_package_dependencies()
 #' 
 #' # With existing function data
-#' functions <- scan_r_functions(".")
-#' deps <- analyze_package_dependencies(".", functions)
+#' functions <- scan_r_functions()
+#' deps <- analyze_package_dependencies(functions_data = functions)
 #' 
 #' # Include suggests packages in unused check
-#' deps <- analyze_package_dependencies(".", include_suggests = TRUE)
+#' deps <- analyze_package_dependencies(include_suggests = TRUE)
 #' }
 #'
 #' @export
-analyze_package_dependencies <- function(package_path, functions_data = NULL, verbose = TRUE, include_suggests = FALSE) {
+analyze_package_dependencies <- function(package_path = NULL, functions_data = NULL, verbose = TRUE, include_suggests = FALSE) {
+  
+  # Smart path detection
+  if (is.null(package_path)) {
+    package_path <- smart_detect_package_path()
+  }
   
   # If no functions data provided, scan the package
   if (is.null(functions_data)) {
@@ -35,8 +40,9 @@ analyze_package_dependencies <- function(package_path, functions_data = NULL, ve
   # Analyze DESCRIPTION file
   description_deps <- parse_description_dependencies(package_path)
   
-  # Scan code for package usage with enhanced function-level tracking
-  code_deps <- scan_code_dependencies_enhanced(functions_data, package_path)
+  # Scan code for package usage
+  # Use the function that actually exists in your original code
+  code_deps <- scan_code_dependencies(functions_data, package_path)
   
   # Find missing packages
   all_detected <- unique(c(
@@ -50,22 +56,35 @@ analyze_package_dependencies <- function(package_path, functions_data = NULL, ve
   missing_packages <- check_missing_packages(all_detected)
   
   # Compare declared vs detected
-  # For "unused" check, exclude Suggests unless specified
-  declared_deps <- c(description_deps$imports, description_deps$depends)
-  if (include_suggests) {
-    declared_deps <- c(declared_deps, description_deps$suggests)
-  }
-  all_declared <- unique(declared_deps)
+  # ALL declared packages include Imports, Depends, AND Suggests
+  all_declared <- unique(c(description_deps$imports, description_deps$depends, description_deps$suggests))
   
+  # For "unused" check, exclude Suggests unless specified
+  declared_for_unused_check <- c(description_deps$imports, description_deps$depends)
+  if (include_suggests) {
+    declared_for_unused_check <- c(declared_for_unused_check, description_deps$suggests)
+  }
+  declared_for_unused_check <- unique(declared_for_unused_check)
+  
+  # UNDECLARED: Packages you use in code but didn't declare ANYWHERE in DESCRIPTION
+  # (not in Imports, Depends, OR Suggests)
   undeclared <- setdiff(all_detected, all_declared)
-  unused <- setdiff(all_declared, all_detected)
+  
+  # UNUSED: Packages you declared in DESCRIPTION but don't actually use in code
+  # Only check Imports/Depends unless include_suggests=TRUE
+  unused <- setdiff(declared_for_unused_check, all_detected)
+  
+  # SUGGESTED BUT USED: Packages in Suggests that are actually used in code
+  # (This is often okay, but worth noting)
+  suggested_but_used <- intersect(all_detected, description_deps$suggests)
   
   result <- list(
     description = description_deps,
     detected = code_deps,
     missing = missing_packages,
-    undeclared = undeclared,
-    unused = unused,
+    undeclared = undeclared,  # These need to be added to DESCRIPTION (not in any field)
+    unused = unused,          # These can be removed from DESCRIPTION  
+    suggested_but_used = suggested_but_used,  # Packages in Suggests that you actually use
     function_usage = code_deps$function_usage,  # New: which functions use which packages
     usage_summary = code_deps$usage_summary,    # New: summary by package
     summary = list(
@@ -74,6 +93,7 @@ analyze_package_dependencies <- function(package_path, functions_data = NULL, ve
       missing_count = length(missing_packages),
       undeclared_count = length(undeclared),
       unused_count = length(unused),
+      suggested_but_used_count = length(suggested_but_used),
       suggests_included = include_suggests
     )
   )
@@ -85,6 +105,9 @@ analyze_package_dependencies <- function(package_path, functions_data = NULL, ve
     message("  Missing packages: ", length(missing_packages))
     message("  Undeclared packages: ", length(undeclared))
     message("  Unused packages: ", length(unused))
+    if (length(suggested_but_used) > 0) {
+      message("  Suggested but used: ", length(suggested_but_used))
+    }
     if (!include_suggests && length(description_deps$suggests) > 0) {
       message("  (Suggests packages not included in unused check)")
     }
@@ -92,7 +115,6 @@ analyze_package_dependencies <- function(package_path, functions_data = NULL, ve
   
   return(result)
 }
-
 #' Parse DESCRIPTION File Dependencies
 #'
 #' @param package_path Character. Package root path
@@ -400,7 +422,36 @@ scan_file_dependencies_enhanced <- function(file_path, functions_data) {
   return(deps)
 }
 
-#' Detect Suspected Package Usage from Code Patterns
+#' Get Package Name from DESCRIPTION File
+#'
+#' @param package_path Character. Path to package root
+#' @return Character. Package name or NULL if not found
+get_package_name_from_description <- function(package_path) {
+  
+  desc_file <- file.path(package_path, "DESCRIPTION")
+  
+  if (!file.exists(desc_file)) {
+    return(NULL)
+  }
+  
+  tryCatch({
+    desc_content <- readLines(desc_file, warn = FALSE)
+    
+    # Look for Package: line
+    package_line <- grep("^Package:", desc_content, value = TRUE)
+    
+    if (length(package_line) > 0) {
+      package_name <- trimws(gsub("^Package:\\s*", "", package_line[1]))
+      return(package_name)
+    }
+    
+    return(NULL)
+  }, error = function(e) {
+    return(NULL)
+  })
+}
+
+#' Detect Suspected Package Usage from Code Patterns (UPDATED - Removed False Positives)
 #'
 #' @param code Character. Code content
 #' @return Character vector of suspected packages
@@ -408,6 +459,7 @@ scan_file_dependencies_enhanced <- function(file_path, functions_data) {
 detect_suspected_packages <- function(code) {
   
   # Common function patterns that suggest package usage
+  # REMOVED purrr and testthat due to false positives
   patterns <- list(
     "ggplot2" = c("ggplot\\s*\\(", "geom_", "aes\\s*\\(", "theme_", "scale_", "labs\\s*\\("),
     "dplyr" = c("mutate\\s*\\(", "filter\\s*\\(", "select\\s*\\(", "arrange\\s*\\(", 
@@ -419,10 +471,9 @@ detect_suspected_packages <- function(code) {
     "DT" = c("datatable\\s*\\(", "renderDataTable\\s*\\("),
     "stringr" = c("str_detect\\s*\\(", "str_replace\\s*\\(", "str_extract\\s*\\(", 
                   "str_split\\s*\\(", "str_match\\s*\\("),
-    "purrr" = c("map\\s*\\(", "map_dfr\\s*\\(", "map_chr\\s*\\(", "walk\\s*\\("),
     "readr" = c("read_csv\\s*\\(", "write_csv\\s*\\(", "read_delim\\s*\\("),
-    "lubridate" = c("ymd\\s*\\(", "mdy\\s*\\(", "as_date\\s*\\(", "interval\\s*\\("),
-    "testthat" = c("test_that\\s*\\(", "expect_", "describe\\s*\\(", "it\\s*\\(")
+    "lubridate" = c("ymd\\s*\\(", "mdy\\s*\\(", "as_date\\s*\\(", "interval\\s*\\(")
+    # Removed "purrr" and "testthat" patterns due to false positives
   )
   
   suspected <- character(0)
@@ -437,6 +488,56 @@ detect_suspected_packages <- function(code) {
   }
   
   return(unique(suspected))
+}
+
+#' Get Specific Function Patterns for Detailed Extraction (UPDATED - Removed False Positives)
+#'
+#' @param package_name Character. Package name
+#' @return List. Pattern information with function names
+get_specific_function_patterns <- function(package_name) {
+  
+  # REMOVED purrr and testthat patterns to avoid false positives
+  pattern_map <- list(
+    "ggplot2" = list(
+      list(pattern = "ggplot\\s*\\(", function_name = "ggplot"),
+      list(pattern = "(geom_\\w+)\\s*\\(", extract_group = 1),
+      list(pattern = "aes\\s*\\(", function_name = "aes"),
+      list(pattern = "(theme_\\w+)\\s*\\(", extract_group = 1),
+      list(pattern = "(scale_\\w+)\\s*\\(", extract_group = 1),
+      list(pattern = "labs\\s*\\(", function_name = "labs")
+    ),
+    "dplyr" = list(
+      list(pattern = "mutate\\s*\\(", function_name = "mutate"),
+      list(pattern = "filter\\s*\\(", function_name = "filter"),
+      list(pattern = "select\\s*\\(", function_name = "select"),
+      list(pattern = "arrange\\s*\\(", function_name = "arrange"),
+      list(pattern = "summarise\\s*\\(", function_name = "summarise"),
+      list(pattern = "group_by\\s*\\(", function_name = "group_by"),
+      list(pattern = "%>%", function_name = "%>%")
+    ),
+    "tidyr" = list(
+      list(pattern = "pivot_longer\\s*\\(", function_name = "pivot_longer"),
+      list(pattern = "pivot_wider\\s*\\(", function_name = "pivot_wider"),
+      list(pattern = "separate\\s*\\(", function_name = "separate"),
+      list(pattern = "unite\\s*\\(", function_name = "unite"),
+      list(pattern = "nest\\s*\\(", function_name = "nest")
+    ),
+    "stringr" = list(
+      list(pattern = "(str_\\w+)\\s*\\(", extract_group = 1)
+    ),
+    "lubridate" = list(
+      list(pattern = "ymd\\s*\\(", function_name = "ymd"),
+      list(pattern = "mdy\\s*\\(", function_name = "mdy"),
+      list(pattern = "as_date\\s*\\(", function_name = "as_date")
+    )
+    # Removed purrr and testthat patterns
+  )
+  
+  if (package_name %in% names(pattern_map)) {
+    return(pattern_map[[package_name]])
+  }
+  
+  return(list())
 }
 
 #' Check Which Packages Are Missing/Not Installed
@@ -514,7 +615,7 @@ install_missing_packages <- function(packages, dependencies = TRUE, verbose = TR
   return(list(success = success, failed = failed))
 }
 
-#' Generate Dependency Report
+#' Generate Dependency Report (UPDATED)
 #'
 #' @param dependency_data List. Result from analyze_package_dependencies
 #' @return Character. Formatted report
@@ -532,6 +633,11 @@ generate_dependency_report <- function(dependency_data) {
   report <- paste0(report, "  Missing packages: ", summary$missing_count, "\n")
   report <- paste0(report, "  Undeclared packages: ", summary$undeclared_count, "\n")
   report <- paste0(report, "  Unused declarations: ", summary$unused_count, "\n")
+  
+  if ("suggested_but_used_count" %in% names(summary) && summary$suggested_but_used_count > 0) {
+    report <- paste0(report, "  Suggested but used: ", summary$suggested_but_used_count, "\n")
+  }
+  
   if ("suggests_included" %in% names(summary)) {
     report <- paste0(report, "  Suggests included in unused check: ", summary$suggests_included, "\n")
   }
@@ -546,9 +652,9 @@ generate_dependency_report <- function(dependency_data) {
     report <- paste0(report, "\n")
   }
   
-  # Undeclared packages
+  # Undeclared packages (truly undeclared - not in any DESCRIPTION field)
   if (length(dependency_data$undeclared) > 0) {
-    report <- paste0(report, "⚠️  UNDECLARED PACKAGES (used but not in DESCRIPTION):\n")
+    report <- paste0(report, "⚠️  UNDECLARED PACKAGES (used but not in DESCRIPTION at all):\n")
     for (pkg in dependency_data$undeclared) {
       if ("usage_summary" %in% names(dependency_data) && pkg %in% names(dependency_data$usage_summary)) {
         usage <- dependency_data$usage_summary[[pkg]]
@@ -557,6 +663,21 @@ generate_dependency_report <- function(dependency_data) {
         report <- paste0(report, "  • ", pkg, "\n")
       }
     }
+    report <- paste0(report, "\n")
+  }
+  
+  # Suggested but used packages (informational - not necessarily a problem)
+  if ("suggested_but_used" %in% names(dependency_data) && length(dependency_data$suggested_but_used) > 0) {
+    report <- paste0(report, "💡 SUGGESTED BUT USED (in Suggests but actually used in code):\n")
+    for (pkg in dependency_data$suggested_but_used) {
+      if ("usage_summary" %in% names(dependency_data) && pkg %in% names(dependency_data$usage_summary)) {
+        usage <- dependency_data$usage_summary[[pkg]]
+        report <- paste0(report, "  • ", pkg, " (used in: ", paste(usage$functions, collapse = ", "), ")\n")
+      } else {
+        report <- paste0(report, "  • ", pkg, "\n")
+      }
+    }
+    report <- paste0(report, "  Note: This is often okay - Suggests packages can be used conditionally\n")
     report <- paste0(report, "\n")
   }
   
@@ -577,7 +698,20 @@ generate_dependency_report <- function(dependency_data) {
     report <- paste0(report, "📦 PACKAGE USAGE DETAILS:\n")
     for (pkg in sort(names(dependency_data$usage_summary))) {
       usage <- dependency_data$usage_summary[[pkg]]
-      report <- paste0(report, "  ", pkg, ":\n")
+      
+      # Determine package status
+      status <- ""
+      if (pkg %in% dependency_data$description$imports) {
+        status <- "(Imports)"
+      } else if (pkg %in% dependency_data$description$depends) {
+        status <- "(Depends)"
+      } else if (pkg %in% dependency_data$description$suggests) {
+        status <- "(Suggests)"
+      } else {
+        status <- "(UNDECLARED)"
+      }
+      
+      report <- paste0(report, "  ", pkg, " ", status, ":\n")
       report <- paste0(report, "    Functions: ", paste(usage$functions, collapse = ", "), "\n")
       report <- paste0(report, "    Usage types: ", paste(usage$usage_types, collapse = ", "), "\n")
       report <- paste0(report, "    Files: ", length(usage$files), "\n")
@@ -594,7 +728,18 @@ generate_dependency_report <- function(dependency_data) {
     if (length(all_detected) > 0) {
       report <- paste0(report, "✅ ALL DETECTED PACKAGES:\n")
       for (pkg in sort(all_detected)) {
-        report <- paste0(report, "  • ", pkg, "\n")
+        # Determine package status
+        status <- ""
+        if (pkg %in% dependency_data$description$imports) {
+          status <- "(Imports)"
+        } else if (pkg %in% dependency_data$description$depends) {
+          status <- "(Depends)"
+        } else if (pkg %in% dependency_data$description$suggests) {
+          status <- "(Suggests)"
+        } else {
+          status <- "(UNDECLARED)"
+        }
+        report <- paste0(report, "  • ", pkg, " ", status, "\n")
       }
     }
   }
@@ -1170,57 +1315,6 @@ extract_suspected_functions_from_file <- function(file_path, package_name) {
   return(character(0))
 }
 
-#' Get Specific Function Patterns for Detailed Extraction
-#'
-#' @param package_name Character. Package name
-#' @return List. Pattern information with function names
-get_specific_function_patterns <- function(package_name) {
-  
-  pattern_map <- list(
-    "ggplot2" = list(
-      list(pattern = "ggplot\\s*\\(", function_name = "ggplot"),
-      list(pattern = "(geom_\\w+)\\s*\\(", extract_group = 1),
-      list(pattern = "aes\\s*\\(", function_name = "aes"),
-      list(pattern = "(theme_\\w+)\\s*\\(", extract_group = 1),
-      list(pattern = "(scale_\\w+)\\s*\\(", extract_group = 1),
-      list(pattern = "labs\\s*\\(", function_name = "labs")
-    ),
-    "dplyr" = list(
-      list(pattern = "mutate\\s*\\(", function_name = "mutate"),
-      list(pattern = "filter\\s*\\(", function_name = "filter"),
-      list(pattern = "select\\s*\\(", function_name = "select"),
-      list(pattern = "arrange\\s*\\(", function_name = "arrange"),
-      list(pattern = "summarise\\s*\\(", function_name = "summarise"),
-      list(pattern = "group_by\\s*\\(", function_name = "group_by"),
-      list(pattern = "%>%", function_name = "%>%")
-    ),
-    "tidyr" = list(
-      list(pattern = "pivot_longer\\s*\\(", function_name = "pivot_longer"),
-      list(pattern = "pivot_wider\\s*\\(", function_name = "pivot_wider"),
-      list(pattern = "separate\\s*\\(", function_name = "separate"),
-      list(pattern = "unite\\s*\\(", function_name = "unite"),
-      list(pattern = "nest\\s*\\(", function_name = "nest")
-    ),
-    "stringr" = list(
-      list(pattern = "(str_\\w+)\\s*\\(", extract_group = 1)
-    ),
-    "purrr" = list(
-      list(pattern = "(map\\w*)\\s*\\(", extract_group = 1),
-      list(pattern = "walk\\s*\\(", function_name = "walk")
-    ),
-    "lubridate" = list(
-      list(pattern = "ymd\\s*\\(", function_name = "ymd"),
-      list(pattern = "mdy\\s*\\(", function_name = "mdy"),
-      list(pattern = "as_date\\s*\\(", function_name = "as_date")
-    )
-  )
-  
-  if (package_name %in% names(pattern_map)) {
-    return(pattern_map[[package_name]])
-  }
-  
-  return(list())
-}
 
 #' Extract Functions After Library/Require Calls
 #'

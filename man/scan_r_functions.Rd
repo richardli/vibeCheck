@@ -2,12 +2,12 @@
 % Please edit documentation in R/package_analysis.r
 \name{scan_r_functions}
 \alias{scan_r_functions}
-\title{Scan R Functions in Package}
+\title{Scan R Functions in Package (UPDATED)}
 \usage{
-scan_r_functions(package_path, verbose = TRUE)
+scan_r_functions(package_path = NULL, verbose = TRUE)
 }
 \arguments{
-\item{package_path}{Character. Package root path}
+\item{package_path}{Character. Package root path (default: auto-detect)}
 
 \item{verbose}{Logical. Print messages}
 }
@@ -15,5 +15,5 @@ scan_r_functions(package_path, verbose = TRUE)
 Data.frame with function information
 }
 \description{
-Updated to scan both .R and .r files (case insensitive).
+Updated to scan both .R and .r files (case insensitive) with smart path detection.
 }

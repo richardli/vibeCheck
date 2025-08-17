@@ -2,7 +2,7 @@
 % Please edit documentation in R/complete_dependency_analysis.r
 \name{generate_dependency_report}
 \alias{generate_dependency_report}
-\title{Generate Dependency Report}
+\title{Generate Dependency Report (UPDATED)}
 \usage{
 generate_dependency_report(dependency_data)
 }
@@ -13,5 +13,5 @@ generate_dependency_report(dependency_data)
 Character. Formatted report
 }
 \description{
-Generate Dependency Report
+Generate Dependency Report (UPDATED)
 }

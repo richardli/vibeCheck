@@ -2,7 +2,7 @@
 % Please edit documentation in R/complete_dependency_analysis.r
 \name{get_specific_function_patterns}
 \alias{get_specific_function_patterns}
-\title{Get Specific Function Patterns for Detailed Extraction}
+\title{Get Specific Function Patterns for Detailed Extraction (UPDATED - Removed False Positives)}
 \usage{
 get_specific_function_patterns(package_name)
 }
@@ -13,5 +13,5 @@ get_specific_function_patterns(package_name)
 List. Pattern information with function names
 }
 \description{
-Get Specific Function Patterns for Detailed Extraction
+Get Specific Function Patterns for Detailed Extraction (UPDATED - Removed False Positives)
 }

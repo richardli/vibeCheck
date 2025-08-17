@@ -1,10 +1,9 @@
-#' VibeCheck: Complete Package Analysis and Fixes
+#' VibeCheck: Complete Package Analysis and Fixes (CORRECTED)
 #'
 #' Main wrapper function that provides a comprehensive analysis of an R package
-#' and offers to fix common R CMD check issues. This is the primary entry point
-#' for the vibeCheck functionality.
+#' and offers to fix common R CMD check issues. Updated with smart path detection.
 #'
-#' @param path Character. Path to package directory (default: ".")
+#' @param path Character. Path to package directory (default: auto-detect from current directory)
 #' @param fix_issues Logical. Whether to interactively fix found issues (default: TRUE)
 #' @param include_dependencies Logical. Whether to analyze dependencies (default: TRUE)
 #' @param verbose Logical. Print detailed progress messages (default: TRUE)
@@ -13,28 +12,31 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Complete package analysis with interactive fixes
+#' # Auto-detect package from current directory
 #' result <- vibecheck()
 #' 
-#' # Analysis only, no fixes
-#' result <- vibecheck(fix_issues = FALSE)
 #' 
-#' # Quick analysis without dependencies
-#' result <- vibecheck(include_dependencies = FALSE)
+#' # Full analysis with dependencies
+#' result <- vibecheck(include_dependencies = TRUE)
 #' 
 #' # Analyze specific package
 #' result <- vibecheck("/path/to/package")
 #' }
 #'
 #' @export
-vibecheck <- function(path = ".", fix_issues = TRUE, include_dependencies = TRUE, verbose = TRUE) {
+vibecheck <- function(path = NULL, fix_issues = FALSE, include_dependencies = FALSE, verbose = TRUE) {
+  
+  # Smart path detection
+  if (is.null(path)) {
+    path <- smart_detect_package_path()
+  }
   
   if (verbose) {
     cat("🔍 VibeCheck: R Package Analysis & Fixes\n")
     cat("=========================================\n\n")
   }
   
-  # Step 1: Comprehensive package analysis
+  # Step 1: Package analysis (using regular analyze_package - it's fast enough)
   if (verbose) cat("📊 Analyzing package structure...\n")
   pkg_info <- analyze_package(path, include_dependencies, verbose = FALSE)
   
@@ -47,6 +49,109 @@ vibecheck <- function(path = ".", fix_issues = TRUE, include_dependencies = TRUE
   }
   
   return(invisible(pkg_info))
+}
+
+#' Smart Package Path Detection
+#'
+#' Automatically detects package root from current working directory.
+#' If CWD is package root, uses it. If CWD is R/ folder, uses parent.
+#'
+#' @return Character. Detected package path
+#' @export
+smart_detect_package_path <- function() {
+  
+  cwd <- getwd()
+  
+  # Check if current directory is package root
+  if (is_package_root(cwd)) {
+    return(cwd)
+  }
+  
+  # Check if current directory is R/ folder inside a package
+  if (basename(cwd) == "R") {
+    parent_dir <- dirname(cwd)
+    if (is_package_root(parent_dir)) {
+      return(parent_dir)
+    }
+  }
+  
+  # Check parent directory in case we're in a subdirectory
+  parent_dir <- dirname(cwd)
+  if (is_package_root(parent_dir)) {
+    return(parent_dir)
+  }
+  
+  # If no package detected, return current directory with warning
+  warning("Could not detect R package structure. Using current directory: ", cwd)
+  return(cwd)
+}
+
+#' Quick Package Check (CORRECTED)
+#'
+#' Fast version of package checking that only reports critical issues.
+#' Uses regular dependency analysis for accuracy.
+#'
+#' @param path Character. Package path (default: auto-detect)
+#' @return List with issues summary
+#' @export
+quick_package_check <- function(path = NULL) {
+  
+  # Smart path detection
+  if (is.null(path)) {
+    path <- smart_detect_package_path()
+  }
+  
+  cat("⚡ Quick Package Check\n")
+  cat("=====================\n")
+  cat("Package path:", path, "\n\n")
+  
+  # Basic analysis with proper dependency checking
+  pkg_info <- analyze_package(path, include_dependencies = TRUE, verbose = FALSE)
+  
+  issues <- list()
+  
+  # Check for missing packages (using proper dependency analysis)
+  if (!is.null(pkg_info$dependencies)) {
+    if (length(pkg_info$dependencies$missing) > 0) {
+      issues$missing_packages <- pkg_info$dependencies$missing
+    }
+    
+    # Check for undeclared dependencies
+    if (length(pkg_info$dependencies$undeclared) > 0) {
+      issues$undeclared_packages <- pkg_info$dependencies$undeclared
+    }
+  }
+  
+  # Check for undocumented functions
+  undocumented <- pkg_info$stats$total_functions - pkg_info$stats$documented_functions
+  if (undocumented > 0) {
+    issues$undocumented_functions <- undocumented
+  }
+  
+  # Print summary
+  if (length(issues) == 0) {
+    cat("✅ No critical issues found! Package looks good.\n\n")
+  } else {
+    cat("⚠️  Issues found:\n")
+    
+    if ("missing_packages" %in% names(issues)) {
+      cat("  • Missing packages:", length(issues$missing_packages), "\n")
+      cat("    ", paste(issues$missing_packages, collapse = ", "), "\n")
+    }
+    
+    if ("undocumented_functions" %in% names(issues)) {
+      cat("  • Undocumented functions:", issues$undocumented_functions, "\n")
+    }
+    
+    if ("undeclared_packages" %in% names(issues)) {
+      cat("  • Undeclared packages:", length(issues$undeclared_packages), "\n")
+      cat("    ", paste(issues$undeclared_packages, collapse = ", "), "\n")
+    }
+    
+    cat("\nRun vibecheck() for detailed analysis and fixes.\n\n")
+  }
+  
+  return(invisible(issues))
 }
 
 #' Print Package Analysis Summary
@@ -107,7 +212,7 @@ offer_interactive_fixes <- function(pkg_info, verbose = TRUE) {
   fixes_available <- FALSE
   
   # 1. Missing packages
-  if ("dependencies" %in% names(pkg_info) && length(pkg_info$dependencies$missing) > 0) {
+  if ("dependencies" %in% names(pkg_info) && !is.null(pkg_info$dependencies) && length(pkg_info$dependencies$missing) > 0) {
     fixes_available <- TRUE
     cat("1. Install missing packages (", length(pkg_info$dependencies$missing), " packages)\n")
   }
@@ -149,7 +254,7 @@ offer_interactive_fixes <- function(pkg_info, verbose = TRUE) {
 #'
 #' @param pkg_info List. Package analysis results
 #' @param namespace_analysis List. Namespace analysis results
-interactive_fix_menu <- function(pkg_info, namespace_analysis) {
+interactive_fix_menu <- function(pkg_info, namespace_analysis = NULL) {
   
   repeat {
     cat("\n🛠️  INTERACTIVE FIX MENU\n")
@@ -170,12 +275,24 @@ interactive_fix_menu <- function(pkg_info, namespace_analysis) {
     switch(choice,
       "1" = fix_missing_packages_interactive(pkg_info),
       "2" = fix_documentation_interactive(pkg_info),
-      "3" = fix_namespace_interactive(namespace_analysis),
+      "3" = {
+        if (is.null(namespace_analysis)) {
+          cat("Analyzing namespace opportunities...\n")
+          namespace_analysis <- analyze_namespace_usage(pkg_info$package_path, verbose = FALSE)
+        }
+        fix_namespace_interactive(namespace_analysis)
+      },
       "4" = fix_global_variables_interactive(),
       "5" = fix_non_ascii_characters_interactive(),
       "6" = fix_empty_examples_interactive(),
       "7" = show_dependency_report(pkg_info),
-      "8" = show_namespace_report(namespace_analysis),
+      "8" = {
+        if (is.null(namespace_analysis)) {
+          cat("Analyzing namespace opportunities...\n")
+          namespace_analysis <- analyze_namespace_usage(pkg_info$package_path, verbose = FALSE)
+        }
+        show_namespace_report(namespace_analysis)
+      },
       "0" = {
         cat("👋 Exiting fix menu. Happy coding!\n\n")
         break
@@ -342,69 +459,40 @@ show_namespace_report <- function(namespace_analysis) {
   cat("\n", report, "\n")
 }
 
-#' Quick Package Check
-#'
-#' Simplified version of vibecheck() that just reports issues without fixes.
-#'
-#' @param path Character. Package path
-#' @return List with issues summary
-#' @export
-quick_package_check <- function(path = ".") {
+# Add these helper functions for R CMD check fixes
+fix_global_variables_interactive <- function() {
+  cat("\nPaste R CMD check output containing global variable errors:\n")
+  cat("(Press Enter twice when done)\n")
   
-  cat("⚡ Quick Package Check\n")
-  cat("=====================\n\n")
-  
-  # Basic analysis
-  pkg_info <- analyze_package(path, include_dependencies = TRUE, verbose = FALSE)
-  
-  issues <- list()
-  
-  # Check for missing packages
-  if (length(pkg_info$dependencies$missing) > 0) {
-    issues$missing_packages <- pkg_info$dependencies$missing
+  lines <- c()
+  repeat {
+    line <- readline()
+    if (nchar(line) == 0) break
+    lines <- c(lines, line)
   }
   
-  # Check for undocumented functions
-  undocumented <- pkg_info$stats$total_functions - pkg_info$stats$documented_functions
-  if (undocumented > 0) {
-    issues$undocumented_functions <- undocumented
+  if (length(lines) == 0) {
+    cat("No input provided.\n")
+    return(invisible())
   }
   
-  # Check for namespace opportunities
-  namespace_analysis <- analyze_namespace_usage(path, verbose = FALSE)
-  if (namespace_analysis$stats$total_opportunities > 0) {
-    issues$namespace_opportunities <- namespace_analysis$stats$total_opportunities
-  }
+  check_output <- paste(lines, collapse = "\n")
   
-  # Check for undeclared dependencies
-  if (length(pkg_info$dependencies$undeclared) > 0) {
-    issues$undeclared_packages <- pkg_info$dependencies$undeclared
-  }
-  
-  # Print summary
-  if (length(issues) == 0) {
-    cat("✅ No issues found! Package looks good.\n\n")
-  } else {
-    cat("⚠️  Issues found:\n")
-    
-    if ("missing_packages" %in% names(issues)) {
-      cat("  • Missing packages:", length(issues$missing_packages), "\n")
-    }
-    
-    if ("undocumented_functions" %in% names(issues)) {
-      cat("  • Undocumented functions:", issues$undocumented_functions, "\n")
-    }
-    
-    if ("namespace_opportunities" %in% names(issues)) {
-      cat("  • Namespace opportunities:", issues$namespace_opportunities, "\n")
-    }
-    
-    if ("undeclared_packages" %in% names(issues)) {
-      cat("  • Undeclared packages:", length(issues$undeclared_packages), "\n")
-    }
-    
-    cat("\nRun vibecheck() for interactive fixes.\n\n")
-  }
-  
-  return(invisible(issues))
+  tryCatch({
+    result <- extract_and_update_globals(check_output)
+    cat("✅ Global variables fixed!\n")
+    cat("Variables added:", paste(result$new_variables, collapse = ", "), "\n")
+  }, error = function(e) {
+    cat("❌ Error:", e$message, "\n")
+  })
+}
+
+fix_non_ascii_characters_interactive <- function() {
+  cat("\n❌ Non-ASCII character fixing not implemented in this version.\n")
+  cat("Please use R CMD check output and fix manually or implement the function.\n")
+}
+
+fix_empty_examples_interactive <- function() {
+  cat("\n📝 Empty examples fixing available through add_custom_examples() function.\n")
+  cat("Use the documentation generation features instead.\n")
 }

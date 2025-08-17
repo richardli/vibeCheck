@@ -2,16 +2,17 @@
 % Please edit documentation in R/vibecheck_wrapper.r
 \name{quick_package_check}
 \alias{quick_package_check}
-\title{Quick Package Check}
+\title{Quick Package Check (CORRECTED)}
 \usage{
-quick_package_check(path = ".")
+quick_package_check(path = NULL)
 }
 \arguments{
-\item{path}{Character. Package path}
+\item{path}{Character. Package path (default: auto-detect)}
 }
 \value{
 List with issues summary
 }
 \description{
-Simplified version of vibecheck() that just reports issues without fixes.
+Fast version of package checking that only reports critical issues.
+Uses regular dependency analysis for accuracy.
 }

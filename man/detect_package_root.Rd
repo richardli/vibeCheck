@@ -2,12 +2,12 @@
 % Please edit documentation in R/package_analysis.r
 \name{detect_package_root}
 \alias{detect_package_root}
-\title{Detect Package Root Directory}
+\title{Detect Package Root Directory (UPDATED)}
 \usage{
-detect_package_root(path, verbose = TRUE)
+detect_package_root(path = NULL, verbose = TRUE)
 }
 \arguments{
-\item{path}{Character. Initial path}
+\item{path}{Character. Initial path (default: auto-detect)}
 
 \item{verbose}{Logical. Print messages}
 }
@@ -15,5 +15,5 @@ detect_package_root(path, verbose = TRUE)
 Character. Package root path
 }
 \description{
-Detect Package Root Directory
+Detect Package Root Directory (UPDATED)
 }

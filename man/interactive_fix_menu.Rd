@@ -4,7 +4,7 @@
 \alias{interactive_fix_menu}
 \title{Interactive Fix Menu}
 \usage{
-interactive_fix_menu(pkg_info, namespace_analysis)
+interactive_fix_menu(pkg_info, namespace_analysis = NULL)
 }
 \arguments{
 \item{pkg_info}{List. Package analysis results}

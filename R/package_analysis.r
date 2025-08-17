@@ -1,10 +1,10 @@
-#' Analyze R Package Structure and Functions
+#' Analyze R Package Structure and Functions (UPDATED)
 #'
 #' Main function to analyze an R package, extracting functions, documentation,
-#' dependencies, and other metadata. Returns a simple list structure.
+#' dependencies, and other metadata. Now with smart path detection.
 #' Updated to handle both .R and .r file extensions.
 #'
-#' @param path Character. Path to package directory (default: ".")
+#' @param path Character. Path to package directory (default: auto-detect)
 #' @param include_dependencies Logical. Whether to analyze dependencies (default: FALSE)
 #' @param verbose Logical. Print progress messages (default: TRUE)
 #'
@@ -12,7 +12,7 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Analyze current package
+#' # Auto-detect and analyze current package
 #' pkg_info <- analyze_package()
 #' 
 #' # Analyze specific package
@@ -23,7 +23,12 @@
 #' }
 #'
 #' @export
-analyze_package <- function(path = ".", include_dependencies = FALSE, verbose = TRUE) {
+analyze_package <- function(path = NULL, include_dependencies = FALSE, verbose = TRUE) {
+  
+  # Smart path detection
+  if (is.null(path)) {
+    path <- smart_detect_package_path()
+  }
   
   if (verbose) message("Analyzing package at: ", path)
   
@@ -74,13 +79,19 @@ analyze_package <- function(path = ".", include_dependencies = FALSE, verbose = 
   return(result)
 }
 
-#' Detect Package Root Directory
+#' Detect Package Root Directory (UPDATED)
 #'
-#' @param path Character. Initial path
+#' @param path Character. Initial path (default: auto-detect)
 #' @param verbose Logical. Print messages
 #' @return Character. Package root path
 #' @export
-detect_package_root <- function(path, verbose = TRUE) {
+detect_package_root <- function(path = NULL, verbose = TRUE) {
+  
+  # Smart path detection if not provided
+  if (is.null(path)) {
+    path <- smart_detect_package_path()
+  }
+  
   path <- normalizePath(path, mustWork = FALSE)
   current_path <- path
   
@@ -104,28 +115,20 @@ detect_package_root <- function(path, verbose = TRUE) {
   return(path)
 }
 
-#' Check if Directory is Package Root
+#' Scan R Functions in Package (UPDATED)
 #'
-#' @param path Character. Path to check
-#' @return Logical. TRUE if package root
-is_package_root <- function(path) {
-  has_description <- file.exists(file.path(path, "DESCRIPTION"))
-  has_r_dir <- dir.exists(file.path(path, "R"))
-  has_r_files <- length(list.files(path, pattern = "\\.[Rr]$")) > 0  # Fixed: case insensitive
-  has_namespace <- file.exists(file.path(path, "NAMESPACE"))
-  
-  return(has_description && (has_r_dir || has_r_files || has_namespace))
-}
-
-#' Scan R Functions in Package
+#' Updated to scan both .R and .r files (case insensitive) with smart path detection.
 #'
-#' Updated to scan both .R and .r files (case insensitive).
-#'
-#' @param package_path Character. Package root path
+#' @param package_path Character. Package root path (default: auto-detect)
 #' @param verbose Logical. Print messages
 #' @return Data.frame with function information
 #' @export
-scan_r_functions <- function(package_path, verbose = TRUE) {
+scan_r_functions <- function(package_path = NULL, verbose = TRUE) {
+  
+  # Smart path detection
+  if (is.null(package_path)) {
+    package_path <- smart_detect_package_path()
+  }
   
   # Find R directories
   possible_dirs <- c(
@@ -190,6 +193,22 @@ scan_r_functions <- function(package_path, verbose = TRUE) {
   
   return(result)
 }
+  
+
+#' Check if Directory is Package Root
+#'
+#' @param path Character. Path to check
+#' @return Logical. TRUE if package root
+is_package_root <- function(path) {
+  has_description <- file.exists(file.path(path, "DESCRIPTION"))
+  has_r_dir <- dir.exists(file.path(path, "R"))
+  has_r_files <- length(list.files(path, pattern = "\\.[Rr]$")) > 0  # Fixed: case insensitive
+  has_namespace <- file.exists(file.path(path, "NAMESPACE"))
+  
+  return(has_description && (has_r_dir || has_r_files || has_namespace))
+}
+
+ 
 
 #' Extract Functions from Single R File (WORKING VERSION)
 #'

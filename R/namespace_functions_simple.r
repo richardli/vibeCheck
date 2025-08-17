@@ -23,6 +23,11 @@
 #' @export
 analyze_namespace_usage <- function(package_path = ".", verbose = TRUE) {
   
+    # Smart path detection
+  if (is.null(package_path)) {
+    package_path <- smart_detect_package_path()
+  }
+
   package_path <- detect_package_root(package_path, verbose = FALSE)
   
   # Build function mappings from DESCRIPTION
@@ -221,6 +226,11 @@ apply_namespace_conversion <- function(package_path = ".",
                                      backup = TRUE,
                                      verbose = TRUE) {
   
+  # Smart path detection
+  if (is.null(package_path)) {
+    package_path <- smart_detect_package_path()
+  }
+
   package_path <- detect_package_root(package_path, verbose = FALSE)
   
   # Get namespace opportunities

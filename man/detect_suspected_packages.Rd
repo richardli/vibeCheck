@@ -2,7 +2,7 @@
 % Please edit documentation in R/complete_dependency_analysis.r
 \name{detect_suspected_packages}
 \alias{detect_suspected_packages}
-\title{Detect Suspected Package Usage from Code Patterns}
+\title{Detect Suspected Package Usage from Code Patterns (UPDATED - Removed False Positives)}
 \usage{
 detect_suspected_packages(code)
 }
@@ -13,5 +13,5 @@ detect_suspected_packages(code)
 Character vector of suspected packages
 }
 \description{
-Detect Suspected Package Usage from Code Patterns
+Detect Suspected Package Usage from Code Patterns (UPDATED - Removed False Positives)
 }
