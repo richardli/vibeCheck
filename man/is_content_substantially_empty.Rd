@@ -2,7 +2,7 @@
 % Please edit documentation in R/documentation_functions.r
 \name{is_content_substantially_empty}
 \alias{is_content_substantially_empty}
-\title{Check if content is substantially empty (NEW FUNCTION - ADD THIS)}
+\title{Check if Content is Substantially Empty (NEW FUNCTION - ADD THIS)}
 \usage{
 is_content_substantially_empty(content)
 }
@@ -13,5 +13,5 @@ is_content_substantially_empty(content)
 Logical. TRUE if content is substantially empty
 }
 \description{
-Check if content is substantially empty (NEW FUNCTION - ADD THIS)
+Check if Content is Substantially Empty (NEW FUNCTION - ADD THIS)
 }

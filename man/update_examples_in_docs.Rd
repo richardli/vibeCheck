@@ -2,7 +2,7 @@
 % Please edit documentation in R/documentation_functions.r
 \name{update_examples_in_docs}
 \alias{update_examples_in_docs}
-\title{Update Examples Section in Documentation Text}
+\title{Update Examples Section in Documentation Text (FIXED DONTRUN)}
 \usage{
 update_examples_in_docs(docs_text, custom_example)
 }
@@ -15,5 +15,5 @@ update_examples_in_docs(docs_text, custom_example)
 Character. Updated documentation
 }
 \description{
-Update Examples Section in Documentation Text
+Fixed to properly escape \dontrun
 }

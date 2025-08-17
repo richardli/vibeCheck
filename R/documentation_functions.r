@@ -696,94 +696,94 @@ generate_bulk_documentation <- function(package_data,
   return(results)
 }
  
-# COPY THESE FUNCTIONS INTO YOUR R/documentation_functions.r FILE
-# You can add them at the end of the file, or replace the existing versions
+# REPLACE THESE FUNCTIONS IN YOUR documentation_functions.r FILE
 
-#' Extract Examples Section from Documentation (FIXED VERSION)
+#' Extract Examples Section from Documentation (FIXED)
 #'
 #' @param docs_text Character. Documentation text
 #' @return Character. Examples section content
-#' @export
 extract_examples_section <- function(docs_text) {
-  
-  # More robust pattern to match @examples section until next @ tag or end
+
+  if (is.null(docs_text) || is.na(docs_text) || nchar(trimws(docs_text)) == 0) {
+    return("")
+  }
+
+  # Pattern to match @examples section until next @ tag or end
   examples_pattern <- "#'\\s*@examples\\s*\\n([\\s\\S]*?)(?=\\n#'\\s*@\\w+|$)"
   examples_match <- stringr::str_match(docs_text, examples_pattern)
-  
+
   if (is.na(examples_match[1, 1])) {
     # Try alternative pattern without requiring newline after @examples
     examples_pattern <- "#'\\s*@examples([\\s\\S]*?)(?=#'\\s*@\\w+|$)"
     examples_match <- stringr::str_match(docs_text, examples_pattern)
-    
+
     if (is.na(examples_match[1, 1])) {
       return("")
     }
   }
-  
+
   raw_content <- examples_match[1, 2]
-  
+
   # Process line by line, removing roxygen markers but preserving content
   lines <- strsplit(raw_content, "\n")[[1]]
   cleaned_lines <- character(0)
-  
+
   for (line in lines) {
-    # Remove #' prefix but keep everything else
-    if (grepl("^\\s*#'", line)) {
-      # More careful removal of #' - preserve spaces after #'
+    if (is.na(line) || is.null(line) || length(line) == 0) {
+      next
+    }
+
+    line <- trimws(line)
+
+    # Check for roxygen comment
+    if (nchar(line) > 0 && grepl("^#'", line)) {
       content_part <- sub("^\\s*#'", "", line)
-      # If there's content after #', remove one leading space if present
+      # Remove one leading space if present
       if (nchar(content_part) > 0 && substr(content_part, 1, 1) == " ") {
         content_part <- substr(content_part, 2, nchar(content_part))
       }
       cleaned_lines <- c(cleaned_lines, content_part)
+    } else if (nchar(line) == 0) {
+      next
     } else {
-      # Non-roxygen line - keep as is but trimmed
       cleaned_lines <- c(cleaned_lines, trimws(line))
     }
   }
-  
-  # Join back together and trim the whole thing
+
+  # Join back together and trim
   result <- paste(cleaned_lines, collapse = "\n")
-  result <- trimws(result)
-  
-  return(result)
+  return(trimws(result))
 }
 
-#' Check if Examples Section is Empty (FIXED VERSION)
+
+#' Check if Examples Section is Empty (FIXED)
 #'
 #' @param examples_content Character. Examples section content
 #' @return Logical. TRUE if examples are empty or just empty dontrun blocks
-#' @export
 is_examples_section_empty <- function(examples_content) {
-  
-  # Check for truly empty content
+
   if (is.null(examples_content) || is.na(examples_content) || nchar(trimws(examples_content)) == 0) {
     return(TRUE)
   }
-  
+
   # Check if there are \dontrun{} blocks
   has_dontrun <- stringr::str_detect(examples_content, "\\\\dontrun\\s*\\{")
-  
+
   if (has_dontrun) {
-    # Extract and check dontrun content
     dontrun_content <- extract_dontrun_content(examples_content)
     return(is_content_substantially_empty(dontrun_content))
   } else {
-    # Check raw content directly
     return(is_content_substantially_empty(examples_content))
   }
 }
 
-#' Extract Content Inside \\dontrun{} Blocks (FIXED VERSION)
+#' Extract Content Inside \\dontrun{} Blocks (FIXED)
 #'
 #' @param content Character. Content containing dontrun blocks
 #' @return Character. Content inside dontrun blocks
 extract_dontrun_content <- function(content) {
   
-  # Pattern to match \dontrun{...} - handle nested braces properly
-  # This uses a recursive approach to match balanced braces
-  
-  # First, find all \dontrun{ positions
+  # Find all \dontrun{ positions
   dontrun_positions <- stringr::str_locate_all(content, "\\\\dontrun\\s*\\{")[[1]]
   
   if (nrow(dontrun_positions) == 0) {
@@ -810,7 +810,6 @@ extract_dontrun_content <- function(content) {
     }
     
     if (brace_count == 0) {
-      # Found matching brace
       end_pos <- pos - 2  # Position of the closing brace
       dontrun_content <- substr(content, start_pos, end_pos)
       all_content <- c(all_content, dontrun_content)
@@ -822,25 +821,25 @@ extract_dontrun_content <- function(content) {
   return(trimws(result))
 }
 
-#' Check if content is substantially empty (NEW FUNCTION - ADD THIS)
+#' Check if Content is Substantially Empty (NEW FUNCTION - ADD THIS)
 #'
 #' @param content Character. Content to check
 #' @return Logical. TRUE if content is substantially empty
 is_content_substantially_empty <- function(content) {
-  
+
   if (is.null(content) || is.na(content) || nchar(trimws(content)) == 0) {
     return(TRUE)
   }
-  
+
   # Split into lines and remove empty ones
   lines <- strsplit(content, "\n")[[1]]
   lines <- trimws(lines)
   lines <- lines[nchar(lines) > 0]
-  
+
   if (length(lines) == 0) {
     return(TRUE)
   }
-  
+
   # Count lines with actual R code vs. just comments/placeholders
   code_lines <- 0
   placeholder_patterns <- c(
@@ -852,7 +851,7 @@ is_content_substantially_empty <- function(content) {
     "^\\s*#\\s*\\.{3,}",  # # ...
     "^\\s*\\[.*\\]\\s*$"  # [Description]
   )
-  
+
   for (line in lines) {
     # Check if this line is a placeholder
     is_placeholder <- FALSE
@@ -862,12 +861,11 @@ is_content_substantially_empty <- function(content) {
         break
       }
     }
-    
+
     # If it's not a placeholder and not just a comment, count it as code
     if (!is_placeholder) {
-      # Check if it's a pure comment line (starts with # but isn't a placeholder)
+      # Check if it's a pure comment line
       if (stringr::str_detect(line, "^\\s*#")) {
-        # It's a comment - these can be substantial if they're descriptive
         # Only skip very minimal comments
         if (!stringr::str_detect(line, "^\\s*#\\s*$")) {
           code_lines <- code_lines + 1
@@ -878,95 +876,73 @@ is_content_substantially_empty <- function(content) {
       }
     }
   }
-  
-  # If we have at least 1 substantial line, it's not empty
+
   return(code_lines == 0)
-}
+} 
 
-# UPDATE THE EXISTING detect_missing_examples FUNCTION
-# Find this function in your file and replace it with this version:
-
-#' Detect Missing or Empty Examples (UPDATED VERSION)
-#'
-#' Analyzes existing documentation to find functions with missing or empty examples.
-#' Updated to use the fixed logic.
+#' Detect Missing or Empty Examples (FIXED VERSION)
 #'
 #' @param package_data List. Result from analyze_package()
-#' @param check_empty_dontrun Logical. Whether to flag empty \\dontrun{} blocks (default: TRUE)
+#' @param check_empty_dontrun Logical. Whether to flag empty \\dontrun{} blocks
 #'
 #' @return List with information about missing examples
-#'
-#' @examples
-#' \dontrun{
-#' pkg_info <- analyze_package()
-#' missing_examples <- detect_missing_examples(pkg_info)
-#' 
-#' # Check results
-#' print(missing_examples$functions_needing_examples)
-#' cat(missing_examples$summary)
-#' }
-#'
 #' @export
 detect_missing_examples <- function(package_data, check_empty_dontrun = TRUE) {
-  
+
   if (!"functions" %in% names(package_data)) {
     stop("package_data must contain 'functions' element. Use analyze_package() first.")
   }
-  
+
   func_data <- package_data$functions
   docs_data <- package_data$documentation
-  
+
   functions_needing_examples <- character(0)
   example_status <- list()
-  
+
   for (i in seq_len(nrow(func_data))) {
     func_name <- func_data$function_name[i]
     has_docs <- docs_data$has_docs[i]
     existing_docs <- if (is.na(docs_data$existing_docs[i])) "" else docs_data$existing_docs[i]
-    
+
     example_status[[func_name]] <- list(
       has_documentation = has_docs,
       has_examples = FALSE,
       examples_empty = FALSE,
       needs_examples = FALSE
     )
-    
+
     if (has_docs && nchar(existing_docs) > 0) {
       # Check for @examples section
       has_examples <- stringr::str_detect(existing_docs, "#'\\s*@examples")
       example_status[[func_name]]$has_examples <- has_examples
-      
+
       if (has_examples) {
-        # Extract examples section
         examples_content <- extract_examples_section(existing_docs)
-        
+
         if (check_empty_dontrun) {
-          # Check if examples are substantially empty
           is_empty <- is_examples_section_empty(examples_content)
           example_status[[func_name]]$examples_empty <- is_empty
-          
+
           if (is_empty) {
             functions_needing_examples <- c(functions_needing_examples, func_name)
             example_status[[func_name]]$needs_examples <- TRUE
           }
         }
       } else {
-        # No examples section at all
         functions_needing_examples <- c(functions_needing_examples, func_name)
         example_status[[func_name]]$needs_examples <- TRUE
       }
     } else {
-      # No documentation at all
       functions_needing_examples <- c(functions_needing_examples, func_name)
       example_status[[func_name]]$needs_examples <- TRUE
     }
   }
-  
+
   # Generate summary
   total_functions <- nrow(func_data)
   documented_functions <- sum(docs_data$has_docs, na.rm = TRUE)
   functions_with_examples <- sum(sapply(example_status, function(x) x$has_examples && !x$examples_empty))
-  
+
   summary_text <- paste0(
     "EXAMPLES ANALYSIS SUMMARY\n",
     "=========================\n",
@@ -980,7 +956,7 @@ detect_missing_examples <- function(package_data, check_empty_dontrun = TRUE) {
       "✅ All functions have proper examples!"
     }
   )
-  
+
   return(list(
     functions_needing_examples = functions_needing_examples,
     example_status = example_status,
@@ -993,166 +969,7 @@ detect_missing_examples <- function(package_data, check_empty_dontrun = TRUE) {
     )
   ))
 }
-#' Add Custom Examples to Functions
-#'
-#' Adds or replaces examples in function documentation using a custom template.
-#'
-#' @param package_data List. Result from analyze_package()
-#' @param example_template Character. Custom example template with [FUNCNAME] placeholder
-#' @param functions Character vector. Specific functions to update (optional, defaults to all needing examples)
-#' @param save_to_files Logical. Whether to save changes to files (default: FALSE)
-#' @param backup Logical. Create backups when saving (default: TRUE)
-#' @param exported_only Logical. Only update exported functions (default: TRUE)
-#'
-#' @return List with update results
-#'
-#' @examples
-#' \dontrun{
-#' # Define custom template
-#' template <- "dhsData <- getDHSdata(country = \"Zambia\", indicator = \"[FUNCNAME]\", year = 2018)"
-#' 
-#' # Add examples to all functions needing them
-#' pkg_info <- analyze_package()
-#' result <- add_custom_examples(pkg_info, template, save_to_files = TRUE)
-#' 
-#' # Add examples to specific functions only
-#' result <- add_custom_examples(pkg_info, template, 
-#'                              functions = c("func1", "func2"),
-#'                              save_to_files = TRUE)
-#' }
-#'
-#' @export
-add_custom_examples <- function(package_data, 
-                               example_template,
-                               functions = NULL,
-                               save_to_files = FALSE,
-                               backup = TRUE,
-                               exported_only = TRUE) {
-  
-  if (!"functions" %in% names(package_data)) {
-    stop("package_data must contain 'functions' element. Use analyze_package() first.")
-  }
-  
-  # Detect which functions need examples
-  missing_examples <- detect_missing_examples(package_data)
-  
-  # If no specific functions provided, use all that need examples
-  if (is.null(functions)) {
-    functions <- missing_examples$functions_needing_examples
-  } else {
-    # Filter to only those that actually need examples
-    functions <- intersect(functions, missing_examples$functions_needing_examples)
-  }
-  
-  if (length(functions) == 0) {
-    message("No functions need example updates")
-    return(list(updated_functions = character(0), total_updates = 0))
-  }
-  
-  # Get exported functions if filtering is requested
-  if (exported_only) {
-    exported_functions <- get_exported_functions(package_data$package_path)
-    if (length(exported_functions) > 0) {
-      functions <- intersect(functions, exported_functions)
-    }
-  }
-  
-  if (length(functions) == 0) {
-    message("No exported functions need example updates")
-    return(list(updated_functions = character(0), total_updates = 0))
-  }
-  
-  message("Adding custom examples to ", length(functions), " functions...")
-  
-  func_data <- package_data$functions
-  docs_data <- package_data$documentation
-  results <- list()
-  
-  for (func_name in functions) {
-    message("  Processing: ", func_name)
-    
-    # Find function data
-    func_idx <- which(func_data$function_name == func_name)
-    
-    if (length(func_idx) == 0) {
-      warning("Function '", func_name, "' not found")
-      next
-    }
-    
-    func_idx <- func_idx[1]
-    file_path <- func_data$file_path[func_idx]
-    
-    tryCatch({
-      # Generate new documentation with custom examples
-      args <- docs_data$parsed_args[[func_idx]]
-      
-      new_docs <- generate_roxygen_template(
-        function_name = func_name,
-        args = args,
-        param_suggestions = package_data$parameter_history,
-        template_type = "exported",
-        add_examples = TRUE,
-        example_template = example_template
-      )
-      
-      results[[func_name]] <- list(
-        function_name = func_name,
-        file_path = file_path,
-        new_documentation = new_docs,
-        updated = TRUE
-      )
-      
-      # Save to file if requested
-      if (save_to_files) {
-        if (docs_data$has_docs[func_idx]) {
-          # Update existing documentation
-          save_result <- update_function_docs(
-            file_path = file_path,
-            function_name = func_name,
-            new_docs = new_docs,
-            backup = backup
-          )
-        } else {
-          # Add new documentation
-          save_result <- save_function_docs(
-            file_path = file_path,
-            function_name = func_name,
-            documentation = new_docs,
-            backup = backup
-          )
-        }
-        
-        results[[func_name]]$saved <- save_result$success
-        results[[func_name]]$save_result <- save_result
-      }
-      
-    }, error = function(e) {
-      warning("Failed to update examples for '", func_name, "': ", e$message)
-      results[[func_name]] <- list(
-        function_name = func_name,
-        updated = FALSE,
-        error = e$message
-      )
-    })
-  }
-  
-  updated_count <- sum(sapply(results, function(x) isTRUE(x$updated)))
-  saved_count <- if (save_to_files) sum(sapply(results, function(x) isTRUE(x$saved))) else 0
-  
-  message("Custom examples update complete!")
-  message("  Updated: ", updated_count, " functions")
-  if (save_to_files) {
-    message("  Saved to files: ", saved_count, " functions")
-  }
-  
-  return(list(
-    updated_functions = names(results),
-    total_updates = updated_count,
-    total_saved = saved_count,
-    results = results,
-    template_used = example_template
-  ))
-}
+
 
 #' Update Examples Only (Preserve Other Documentation)
 #'
@@ -1230,7 +1047,187 @@ update_examples_only <- function(file_path, function_name, example_template, bac
   return(result)
 }
 
-#' Update Examples Section in Documentation Text
+
+
+#' Add Custom Examples to Functions (PRESERVE EXISTING DOCS)
+#'
+#' Adds or replaces ONLY the examples section, preserving all existing documentation
+#'
+#' @param package_data List. Result from analyze_package()
+#' @param example_template Character. Custom example template with [FUNCNAME] placeholder
+#' @param functions Character vector. Specific functions to update (optional)
+#' @param save_to_files Logical. Whether to save changes to files (default: FALSE)
+#' @param backup Logical. Create backups when saving (default: FALSE)
+#' @param exported_only Logical. Only update exported functions (default: TRUE)
+#'
+#' @return List with update results
+#' @export
+add_custom_examples <- function(package_data,
+                               example_template,
+                               functions = NULL,
+                               save_to_files = FALSE,
+                               backup = FALSE,  # Changed default to FALSE
+                               exported_only = TRUE) {
+
+  if (!"functions" %in% names(package_data)) {
+    stop("package_data must contain 'functions' element. Use analyze_package() first.")
+  }
+
+  # Detect which functions need examples
+  missing_examples <- detect_missing_examples(package_data)
+
+  # Determine target functions
+  if (is.null(functions)) {
+    functions <- missing_examples$functions_needing_examples
+  } else {
+    functions <- intersect(functions, missing_examples$functions_needing_examples)
+  }
+
+  # Filter by export status if requested
+  if (exported_only) {
+    exported_functions <- get_exported_functions(package_data$package_path)
+    if (length(exported_functions) > 0) {
+      functions <- intersect(functions, exported_functions)
+    }
+  }
+
+  if (length(functions) == 0) {
+    message("No functions need example updates")
+    return(list(updated_functions = character(0), total_updates = 0))
+  }
+
+  message("Adding custom examples to ", length(functions), " functions...")
+
+  func_data <- package_data$functions
+  docs_data <- package_data$documentation
+  results <- list()
+
+  for (func_name in functions) {
+    message("  Processing: ", func_name)
+
+    func_idx <- which(func_data$function_name == func_name)
+
+    if (length(func_idx) == 0) {
+      warning("Function '", func_name, "' not found")
+      next
+    }
+
+    func_idx <- func_idx[1]
+    file_path <- func_data$file_path[func_idx]
+
+    tryCatch({
+      # Generate custom example
+      custom_example <- generate_custom_example(func_name, example_template)
+
+      # Use examples-only update to preserve existing documentation
+      if (docs_data$has_docs[func_idx]) {
+        # Function has existing docs - just update examples
+        save_result <- update_examples_only(
+          file_path = file_path,
+          function_name = func_name,
+          example_template = example_template,
+          backup = backup
+        )
+
+        results[[func_name]] <- list(
+          function_name = func_name,
+          file_path = file_path,
+          updated = TRUE,
+          method = "examples_only_update",
+          example_added = custom_example
+        )
+
+        if (save_to_files) {
+          results[[func_name]]$saved <- save_result$success
+          results[[func_name]]$save_result <- save_result
+        }
+
+      } else {
+        # Function has no docs - need to create minimal documentation
+        minimal_docs <- generate_minimal_roxygen_with_examples(
+          function_name = func_name,
+          example_template = example_template
+        )
+
+        results[[func_name]] <- list(
+          function_name = func_name,
+          file_path = file_path,
+          updated = TRUE,
+          method = "minimal_docs_creation",
+          example_added = custom_example
+        )
+
+        if (save_to_files) {
+          save_result <- save_function_docs(
+            file_path = file_path,
+            function_name = func_name,
+            documentation = minimal_docs,
+            backup = backup
+          )
+
+          results[[func_name]]$saved <- save_result$success
+          results[[func_name]]$save_result <- save_result
+        }
+      }
+
+    }, error = function(e) {
+      warning("Failed to update examples for '", func_name, "': ", e$message)
+      results[[func_name]] <- list(
+        function_name = func_name,
+        updated = FALSE,
+        error = e$message
+      )
+    })
+  }
+
+  updated_count <- sum(sapply(results, function(x) isTRUE(x$updated)))
+  saved_count <- if (save_to_files) sum(sapply(results, function(x) isTRUE(x$saved))) else 0
+
+  message("Custom examples update complete!")
+  message("  Updated: ", updated_count, " functions")
+  if (save_to_files) {
+    message("  Saved to files: ", saved_count, " functions")
+  }
+
+  return(list(
+    updated_functions = names(results),
+    total_updates = updated_count,
+    total_saved = saved_count,
+    results = results,
+    template_used = example_template
+  ))
+}
+
+
+
+#' Generate Minimal Roxygen Documentation with Examples (FIXED DONTRUN)
+#'
+#' Fixed to properly escape \dontrun
+#'
+#' @param function_name Character. Function name
+#' @param example_template Character. Example template
+#' @return Character. Minimal roxygen documentation
+generate_minimal_roxygen_with_examples <- function(function_name, example_template) {
+  
+  custom_example <- generate_custom_example(function_name, example_template)
+  
+  template <- paste0("#' ", function_name, "\n")
+  template <- paste0(template, "#'\n")
+  template <- paste0(template, "#' [Add description]\n")
+  template <- paste0(template, "#'\n")
+  template <- paste0(template, "#' @examples\n")
+  template <- paste0(template, "#' \\\\dontrun{\n")  # Fixed: double backslash
+  template <- paste0(template, "#' ", custom_example, "\n")
+  template <- paste0(template, "#' }\n")
+  template <- paste0(template, "#'\n")
+  template <- paste0(template, "#' @export\n")
+  
+  return(template)
+}
+
+#' Update Examples Section in Documentation Text (FIXED DONTRUN)
+#'
+#' Fixed to properly escape \dontrun
 #'
 #' @param docs_text Character. Existing documentation
 #' @param custom_example Character. New example content
@@ -1242,71 +1239,81 @@ update_examples_in_docs <- function(docs_text, custom_example) {
   
   if (has_examples) {
     # Replace existing examples section
-    examples_pattern <- "(#'\\s*@examples\\s*[\\s\\S]*?)(?=#'\\s*@\\w+|$)"
-    new_examples <- paste0("#' @examples\n#' \\dontrun{\n#' ", custom_example, "\n#' }")
+    # More precise pattern to replace just the examples content
+    examples_pattern <- "(#'\\s*@examples\\s*\\n)((?:#'[^@]*\\n)*)((?=#'\\s*@\\w+)|(?=#'\\s*$)|$)"
     
-    updated_docs <- stringr::str_replace(docs_text, examples_pattern, new_examples)
+    # Create new examples content with properly escaped \dontrun
+    new_examples_content <- paste0(
+      "#' \\\\dontrun{\n",  # Fixed: double backslash for proper escaping
+      "#' ", custom_example, "\n",
+      "#' }\n",
+      "#'\n"
+    )
+    
+    # Replace the examples content but keep the @examples line
+    updated_docs <- stringr::str_replace(
+      docs_text, 
+      examples_pattern, 
+      paste0("\\1", new_examples_content, "\\3")
+    )
+    
   } else {
     # Add new examples section before @export (if exists) or at end
     if (stringr::str_detect(docs_text, "#'\\s*@export")) {
       # Insert before @export
-      export_pattern <- "(.*)(#'\\s*@export.*)"
-      new_examples <- paste0("\\1#' @examples\n#' \\dontrun{\n#' ", custom_example, "\n#' }\n#'\n\\2")
+      export_pattern <- "(.*?)(#'\\s*@export.*)"
+      new_examples <- paste0(
+        "\\1",
+        "#' @examples\n",
+        "#' \\\\dontrun{\n",  # Fixed: double backslash for proper escaping
+        "#' ", custom_example, "\n",
+        "#' }\n",
+        "#'\n",
+        "\\2"
+      )
       updated_docs <- stringr::str_replace(docs_text, export_pattern, new_examples)
     } else {
       # Add at end
       if (!stringr::str_detect(docs_text, "#'\\s*$")) {
         docs_text <- paste0(docs_text, "\n#'")
       }
-      updated_docs <- paste0(docs_text, "\n#' @examples\n#' \\dontrun{\n#' ", custom_example, "\n#' }")
+      updated_docs <- paste0(
+        docs_text, "\n",
+        "#' @examples\n",
+        "#' \\\\dontrun{\n",  # Fixed: double backslash for proper escaping
+        "#' ", custom_example, "\n",
+        "#' }"
+      )
     }
   }
   
   return(updated_docs)
 }
-
-#' Bulk Examples Update with Custom Template
+#' Bulk Examples Update with Custom Template (PRESERVE EXISTING DOCS)
 #'
-#' Convenience function to detect and update all functions needing examples.
-#'
-#' @param package_path Character. Package directory path (default: ".")
+#' @param package_path Character. Package directory path
 #' @param example_template Character. Custom example template with [FUNCNAME] placeholder
 #' @param save_to_files Logical. Whether to save changes to files (default: TRUE)
-#' @param backup Logical. Create backups (default: TRUE)
+#' @param backup Logical. Create backups (default: FALSE)
 #' @param exported_only Logical. Only update exported functions (default: TRUE)
 #'
 #' @return List with comprehensive results
-#'
-#' @examples
-#' \dontrun{
-#' # Define your custom template
-#' template <- "dhsData <- getDHSdata(country = \"Zambia\", indicator = \"[FUNCNAME]\", year = 2018)"
-#' 
-#' # Update all functions that need examples
-#' result <- bulk_examples_update(".", template, save_to_files = TRUE)
-#' 
-#' # Check results
-#' cat(result$summary)
-#' print(result$updated_functions)
-#' }
-#'
-#' @export
-bulk_examples_update <- function(package_path = ".", 
+bulk_examples_update <- function(package_path = ".",
                                 example_template,
                                 save_to_files = TRUE,
-                                backup = TRUE,
+                                backup = FALSE,  # Changed default to FALSE
                                 exported_only = TRUE) {
-  
+
   message("Starting bulk examples update...")
-  
+
   # Analyze package
   package_data <- analyze_package(package_path, verbose = FALSE)
-  
+
   # Detect missing examples
   missing_analysis <- detect_missing_examples(package_data)
-  
+
   message("Found ", length(missing_analysis$functions_needing_examples), " functions needing examples")
-  
+
   if (length(missing_analysis$functions_needing_examples) == 0) {
     return(list(
       summary = "No functions need example updates",
@@ -1314,8 +1321,8 @@ bulk_examples_update <- function(package_path = ".",
       missing_analysis = missing_analysis
     ))
   }
-  
-  # Update examples
+
+  # Update examples (now preserves existing docs)
   update_result <- add_custom_examples(
     package_data = package_data,
     example_template = example_template,
@@ -1323,7 +1330,7 @@ bulk_examples_update <- function(package_path = ".",
     backup = backup,
     exported_only = exported_only
   )
-  
+
   # Generate summary
   summary_text <- paste0(
     "BULK EXAMPLES UPDATE COMPLETE\n",
@@ -1332,11 +1339,12 @@ bulk_examples_update <- function(package_path = ".",
     "Functions needing examples: ", length(missing_analysis$functions_needing_examples), "\n",
     "Functions updated: ", update_result$total_updates, "\n",
     if (save_to_files) paste0("Functions saved: ", update_result$total_saved, "\n") else "",
-    "Export-only mode: ", exported_only, "\n\n",
+    "Export-only mode: ", exported_only, "\n",
+    "Backup created: ", backup, "\n\n",
     "Updated functions:\n",
     paste("  •", update_result$updated_functions, collapse = "\n")
   )
-  
+
   return(list(
     summary = summary_text,
     updated_functions = update_result$updated_functions,
@@ -1345,3 +1353,4 @@ bulk_examples_update <- function(package_path = ".",
     template_used = example_template
   ))
 }
+

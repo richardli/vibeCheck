@@ -2,7 +2,7 @@
 % Please edit documentation in R/documentation_functions.r
 \name{extract_examples_section}
 \alias{extract_examples_section}
-\title{Extract Examples Section from Documentation (FIXED VERSION)}
+\title{Extract Examples Section from Documentation (FIXED)}
 \usage{
 extract_examples_section(docs_text)
 }
@@ -13,5 +13,5 @@ extract_examples_section(docs_text)
 Character. Examples section content
 }
 \description{
-Extract Examples Section from Documentation (FIXED VERSION)
+Extract Examples Section from Documentation (FIXED)
 }

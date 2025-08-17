@@ -2,7 +2,7 @@
 % Please edit documentation in R/package_analysis.r
 \name{extract_functions_from_file}
 \alias{extract_functions_from_file}
-\title{Extract Functions from Single R File}
+\title{Extract Functions from Single R File (WORKING VERSION)}
 \usage{
 extract_functions_from_file(file_path)
 }
@@ -13,5 +13,5 @@ extract_functions_from_file(file_path)
 Data.frame with function information
 }
 \description{
-Extract Functions from Single R File
+Extract Functions from Single R File (WORKING VERSION)
 }

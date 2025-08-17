@@ -191,7 +191,7 @@ scan_r_functions <- function(package_path, verbose = TRUE) {
   return(result)
 }
 
-#' Extract Functions from Single R File
+#' Extract Functions from Single R File (WORKING VERSION)
 #'
 #' @param file_path Character. Path to R file
 #' @return Data.frame with function information
@@ -206,19 +206,28 @@ extract_functions_from_file <- function(file_path) {
   
   if (length(content) == 0) return(data.frame())
   
+  # Join all lines into single text for pattern matching
   file_text <- paste(content, collapse = "\n")
   
-  # Improved regex to find function definitions with better capture groups
-  # This regex looks for: (optional roxygen comments)(whitespace)(function_name)<-function(args)
-  func_pattern <- "(?:^|\\n)((?:\\s*#'[^\\n]*\\n)*)(\\s*)([a-zA-Z_][a-zA-Z0-9_\\.]*)\\s*<-\\s*function\\s*\\(([^\\)]*)\\)"
+  # Use the pattern that worked in debug
+  func_pattern <- "([a-zA-Z_][a-zA-Z0-9_\\.]*)\\s*<-\\s*function"
   
+  # Find all matches
   matches <- gregexpr(func_pattern, file_text, perl = TRUE)[[1]]
   
   if (matches[1] == -1) {
-    return(data.frame())
+    return(data.frame(
+      file_path = character(0),
+      file_name = character(0),
+      function_name = character(0),
+      args_string = character(0),
+      start_pos = integer(0),
+      has_docs = logical(0),
+      stringsAsFactors = FALSE
+    ))
   }
   
-  # Extract function information
+  # Initialize result data frame
   functions_info <- data.frame(
     file_path = character(0),
     file_name = character(0),
@@ -233,45 +242,26 @@ extract_functions_from_file <- function(file_path) {
   match_lengths <- attr(matches, "capture.length")
   
   for (i in seq_along(matches)) {
-    match_start <- matches[i]
+    func_start_pos <- matches[i]
     
-    # Extract captured groups
-    docs_start <- match_data[i, 1]
-    docs_length <- match_lengths[i, 1]
-    
-    whitespace_start <- match_data[i, 2]
-    whitespace_length <- match_lengths[i, 2]
-    
-    func_name_start <- match_data[i, 3]
-    func_name_length <- match_lengths[i, 3]
-    
-    args_start <- match_data[i, 4]
-    args_length <- match_lengths[i, 4]
-    
-    # Extract strings
-    existing_docs <- if (docs_length > 0) {
-      substr(file_text, docs_start, docs_start + docs_length - 1)
-    } else {
-      ""
-    }
-    
+    # Extract function name from capture group
+    func_name_start <- match_data[i, 1]
+    func_name_length <- match_lengths[i, 1]
     function_name <- substr(file_text, func_name_start, func_name_start + func_name_length - 1)
-    args_string <- substr(file_text, args_start, args_start + args_length - 1)
     
-    # The start position should be the beginning of the documentation or function
-    # If there are docs, start from docs; if not, start from function
-    start_pos <- if (docs_length > 0) docs_start else whitespace_start
+    # Extract arguments - find the parentheses after function
+    args_string <- extract_function_args_simple(file_text, func_start_pos)
     
-    # Check if we actually have documentation
-    has_docs_flag <- docs_length > 0 && nchar(trimws(existing_docs)) > 0
+    # Find documentation start by looking backwards from function
+    docs_info <- find_docs_start_simple(file_text, func_start_pos)
     
     functions_info <- rbind(functions_info, data.frame(
       file_path = file_path,
       file_name = basename(file_path),
       function_name = function_name,
-      args_string = trimws(args_string),
-      start_pos = start_pos,
-      has_docs = has_docs_flag,
+      args_string = args_string,
+      start_pos = docs_info$start_pos,
+      has_docs = docs_info$has_docs,
       stringsAsFactors = FALSE
     ))
   }
@@ -279,12 +269,122 @@ extract_functions_from_file <- function(file_path) {
   return(functions_info)
 }
 
-#' Extract Function Documentation from File (Fixed)
+#' Extract Function Arguments (Simple Version)
+#'
+#' @param file_text Character. Full file content
+#' @param func_start_pos Integer. Position where function definition starts
+#' @return Character. Arguments string
+extract_function_args_simple <- function(file_text, func_start_pos) {
+  
+  # Find "function(" starting from func_start_pos
+  remaining_text <- substr(file_text, func_start_pos, nchar(file_text))
+  
+  # Look for "function" followed by "("
+  func_match <- stringr::str_locate(remaining_text, "function\\s*\\(")
+  
+  if (is.na(func_match[1, 1])) {
+    return("")
+  }
+  
+  # Position of opening parenthesis in full text
+  paren_start <- func_start_pos + func_match[1, 2]
+  
+  # Find matching closing parenthesis
+  paren_count <- 1
+  pos <- paren_start
+  
+  while (pos <= nchar(file_text) && paren_count > 0) {
+    char <- substr(file_text, pos, pos)
+    if (char == "(") {
+      paren_count <- paren_count + 1
+    } else if (char == ")") {
+      paren_count <- paren_count - 1
+    }
+    pos <- pos + 1
+  }
+  
+  if (paren_count == 0) {
+    # Found matching parenthesis
+    args_end <- pos - 2
+    args_text <- substr(file_text, paren_start, args_end)
+    
+    # Clean up whitespace and newlines
+    args_text <- gsub("\\s+", " ", args_text)
+    args_text <- trimws(args_text)
+    
+    return(args_text)
+  }
+  
+  return("")
+}
+
+#' Find Documentation Start (Simple Version)
+#'
+#' @param file_text Character. Full file content
+#' @param func_start_pos Integer. Position where function starts
+#' @return List with start_pos and has_docs
+find_docs_start_simple <- function(file_text, func_start_pos) {
+  
+  # Convert to lines
+  lines <- strsplit(file_text, "\n")[[1]]
+  
+  # Find which line the function is on
+  text_before_func <- substr(file_text, 1, func_start_pos - 1)
+  func_line_num <- length(strsplit(text_before_func, "\n")[[1]])
+  
+  # Look backwards for roxygen documentation
+  doc_start_line <- func_line_num
+  found_docs <- FALSE
+  
+  # Search backwards up to 100 lines
+  for (i in (func_line_num - 1):max(1, func_line_num - 100)) {
+    if (i < 1) break
+    
+    line <- lines[i]
+    trimmed_line <- trimws(line)
+    
+    if (stringr::str_detect(trimmed_line, "^#'")) {
+      doc_start_line <- i
+      found_docs <- TRUE
+    } else if (nchar(trimmed_line) == 0) {
+      # Empty line - if we're collecting docs, include it
+      if (found_docs) {
+        doc_start_line <- i
+      }
+    } else {
+      # Non-roxygen, non-empty line
+      if (found_docs) {
+        # Found end of docs block, docs start after this line
+        doc_start_line <- i + 1
+        break
+      }
+    }
+  }
+  
+  # Calculate character position
+  start_pos <- if (found_docs && doc_start_line < func_line_num) {
+    if (doc_start_line == 1) {
+      1
+    } else {
+      sum(nchar(lines[1:(doc_start_line - 1)])) + (doc_start_line - 1) + 1
+    }
+  } else {
+    func_start_pos
+  }
+  
+  return(list(
+    start_pos = start_pos,
+    has_docs = found_docs
+  ))
+}
+
+#' Extract Function Documentation (WITH WARNINGS)
 #'
 #' @param file_path Character. Path to file
-#' @param start_pos Integer. Starting position of function or its documentation
-#' @return Character. Documentation string
-extract_function_docs <- function(file_path, start_pos) {
+#' @param start_pos Integer. Starting position (for backward compatibility)
+#' @param function_name Character. Function name for better extraction
+#' @return Character. Complete documentation string
+extract_function_docs <- function(file_path, start_pos, function_name = NULL) {
   
   tryCatch({
     content <- readLines(file_path, warn = FALSE)
@@ -297,57 +397,145 @@ extract_function_docs <- function(file_path, start_pos) {
     return("")
   }
   
+  # Use function name for most reliable extraction
+  if (!is.null(function_name)) {
+    return(extract_complete_roxygen_block(content, function_name, file_path))
+  }
+  
+  # Fallback to position-based
   file_text <- paste(content, collapse = "\n")
-  
-  # Convert character position to line number
   text_before <- substr(file_text, 1, start_pos - 1)
-  lines_before <- length(strsplit(text_before, "\n")[[1]])
+  line_num <- length(strsplit(text_before, "\n")[[1]])
   
-  # Start from the line before start_pos and work backwards
-  lines <- strsplit(file_text, "\n")[[1]]
+  return(extract_complete_roxygen_block_by_line(content, line_num, function_name, file_path))
+}
+
+#' Extract Complete Roxygen Block by Function Name (WITH WARNINGS)
+#'
+#' @param content Character vector. File lines
+#' @param function_name Character. Function name
+#' @param file_path Character. File path for warnings
+#' @return Character. Complete roxygen documentation
+extract_complete_roxygen_block <- function(content, function_name, file_path = NULL) {
   
-  # Find the actual function line by looking forward from start_pos
-  function_line_idx <- lines_before
+  # Find function definition line
+  func_patterns <- c(
+    paste0("^\\s*", stringr::str_escape(function_name), "\\s*<-\\s*function"),
+    paste0("\\b", stringr::str_escape(function_name), "\\s*<-\\s*function")
+  )
   
-  # Work backwards from the function line to collect all roxygen comments
-  roxygen_lines <- character(0)
-  
-  # Start from the line just before the function and work backwards
-  for (i in (function_line_idx - 1):max(1, function_line_idx - 50)) {
-    if (i < 1) break
-    
-    line <- lines[i]
-    trimmed_line <- trimws(line)
-    
-    # If we hit an empty line, continue (allow gaps in documentation)
-    if (nchar(trimmed_line) == 0) {
-      # Only continue if we haven't started collecting roxygen lines yet
-      # or if we're in the middle of documentation block
-      if (length(roxygen_lines) == 0) {
-        next
-      } else {
-        # If we already have roxygen lines, an empty line might be part of the docs
-        roxygen_lines <- c(line, roxygen_lines)
-        next
-      }
-    }
-    
-    # Check for roxygen comment
-    if (stringr::str_detect(trimmed_line, "^#'")) {
-      roxygen_lines <- c(line, roxygen_lines)
-    } else {
-      # Stop at first non-roxygen, non-empty line
+  func_line <- NULL
+  for (pattern in func_patterns) {
+    matches <- which(stringr::str_detect(content, pattern))
+    if (length(matches) > 0) {
+      func_line <- matches[1]
       break
     }
   }
   
-  # If we found roxygen lines, combine them
-  if (length(roxygen_lines) > 0) {
-    # Remove the reversal - roxygen_lines is already in correct order
-    return(paste(roxygen_lines, collapse = "\n"))
+  if (is.null(func_line)) {
+    return("")
   }
   
-  return("")
+  return(extract_complete_roxygen_block_by_line(content, func_line, function_name, file_path))
+}
+
+#' Extract Complete Roxygen Block by Line Number (WITH WARNINGS)
+#'
+#' @param content Character vector. File lines
+#' @param func_line Integer. Line where function is defined
+#' @param function_name Character. Function name for warning messages
+#' @param file_path Character. File path for warning messages
+#' @return Character. Complete roxygen documentation
+extract_complete_roxygen_block_by_line <- function(content, func_line, function_name = NULL, file_path = NULL) {
+  
+  # Strategy: Find ALL roxygen lines above the function, warn about breaks
+  
+  roxygen_lines_with_positions <- list()
+  broken_blocks <- list()  # Track where blocks are broken
+  
+  # Track state for detecting breaks
+  in_roxygen_block <- FALSE
+  last_roxygen_line <- NULL
+  
+  for (i in (func_line - 1):1) {
+    line <- content[i]
+    trimmed <- trimws(line)
+    
+    if (stringr::str_detect(trimmed, "^#'")) {
+      # This is a roxygen line
+      roxygen_lines_with_positions[[length(roxygen_lines_with_positions) + 1]] <- list(
+        line_num = i,
+        content = line
+      )
+      
+      # Check if there was a break in the block
+      if (in_roxygen_block && !is.null(last_roxygen_line) && (last_roxygen_line - i) > 1) {
+        # There was a gap - check what caused it
+        gap_lines <- (i + 1):(last_roxygen_line - 1)
+        breaking_lines <- c()
+        
+        for (gap_line in gap_lines) {
+          gap_content <- trimws(content[gap_line])
+          if (nchar(gap_content) > 0 && !stringr::str_detect(gap_content, "^#'")) {
+            # This line broke the roxygen block
+            breaking_lines <- c(breaking_lines, gap_line)
+          }
+        }
+        
+        if (length(breaking_lines) > 0) {
+          broken_blocks[[length(broken_blocks) + 1]] <- list(
+            start_line = i,
+            end_line = last_roxygen_line,
+            breaking_lines = breaking_lines
+          )
+        }
+      }
+      
+      in_roxygen_block <- TRUE
+      last_roxygen_line <- i
+      
+    } else if (nchar(trimmed) == 0) {
+      # Empty line - might be part of roxygen block, check context
+      has_roxygen_before <- FALSE
+      has_roxygen_after <- FALSE
+      
+      # Check a few lines before
+      for (j in (i-1):max(1, i-5)) {
+        if (j >= 1 && stringr::str_detect(trimws(content[j]), "^#'")) {
+          has_roxygen_before <- TRUE
+          break
+        }
+      }
+      
+      # Check a few lines after
+      for (j in (i+1):min(func_line-1, i+5)) {
+        if (j <= func_line-1 && stringr::str_detect(trimws(content[j]), "^#'")) {
+          has_roxygen_after <- TRUE
+          break
+        }
+      }
+      
+      # Include empty line if it's between roxygen lines
+      if (has_roxygen_before && has_roxygen_after) {
+        roxygen_lines_with_positions[[length(roxygen_lines_with_positions) + 1]] <- list(
+          line_num = i,
+          content = line
+        )
+      }
+    }
+    # Note: We ignore regular comments (#) and code lines but track them as potential breaks
+  }
+  
+  # Reverse the order and extract content
+  if (length(roxygen_lines_with_positions) == 0) {
+    return("")
+  }
+  
+  roxygen_lines_with_positions <- rev(roxygen_lines_with_positions)
+  final_lines <- sapply(roxygen_lines_with_positions, function(x) x$content)
+  
+  return(paste(final_lines, collapse = "\n"))
 }
 
 #' Parse Function Documentation
@@ -376,7 +564,8 @@ parse_function_docs <- function(functions_data) {
       func_name <- functions_data$function_name[i]
       start_pos <- functions_data$start_pos[i]
       
-      docs_data$existing_docs[i] <- extract_function_docs(file_path, start_pos)
+      # Pass function name for better extraction
+      docs_data$existing_docs[i] <- extract_function_docs(file_path, start_pos, func_name)
     } else {
       docs_data$existing_docs[i] <- ""
     }
@@ -419,63 +608,6 @@ parse_function_arguments <- function(args_string) {
   }
   
   return(arg_list)
-}
-
-#' Extract Function Documentation from File
-#'
-#' @param file_path Character. Path to file
-#' @param start_pos Integer. Starting position of function
-#' @return Character. Documentation string
-extract_function_docs <- function(file_path, start_pos) {
-  
-  tryCatch({
-    content <- readLines(file_path, warn = FALSE)
-  }, error = function(e) {
-    warning("Could not read file: ", file_path)
-    return("")
-  })
-  
-  if (length(content) == 0) {
-    return("")
-  }
-  
-  file_text <- paste(content, collapse = "\n")
-  
-  # Extract text before the function definition
-  before_func <- substr(file_text, 1, start_pos - 1)
-  
-  # Find roxygen comments immediately before function
-  lines_before <- strsplit(before_func, "\n")[[1]]
-  
-  if (length(lines_before) == 0) {
-    return("")
-  }
-  
-  # Work backwards to find roxygen comments
-  roxygen_lines <- character(0)
-  for (i in length(lines_before):1) {
-    line <- lines_before[i]
-    
-    # Handle empty or NULL lines
-    if (is.na(line) || is.null(line) || length(line) == 0) {
-      next
-    }
-    
-    line <- trimws(line)
-    
-    # Check for roxygen comment
-    if (nchar(line) > 0 && grepl("^#'", line)) {
-      roxygen_lines <- c(line, roxygen_lines)
-    } else if (nchar(line) == 0) {
-      # Skip empty lines
-      next
-    } else {
-      # Stop at first non-roxygen, non-empty line
-      break
-    }
-  }
-  
-  return(paste(roxygen_lines, collapse = "\n"))
 }
 
 #' Build Parameter History from Existing Documentation

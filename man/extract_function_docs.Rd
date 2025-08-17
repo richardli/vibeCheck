@@ -2,24 +2,20 @@
 % Please edit documentation in R/package_analysis.r
 \name{extract_function_docs}
 \alias{extract_function_docs}
-\title{Extract Function Documentation from File (Fixed)}
+\title{Extract Function Documentation (WITH WARNINGS)}
 \usage{
-extract_function_docs(file_path, start_pos)
-
-extract_function_docs(file_path, start_pos)
+extract_function_docs(file_path, start_pos, function_name = NULL)
 }
 \arguments{
 \item{file_path}{Character. Path to file}
 
-\item{start_pos}{Integer. Starting position of function}
+\item{start_pos}{Integer. Starting position (for backward compatibility)}
+
+\item{function_name}{Character. Function name for better extraction}
 }
 \value{
-Character. Documentation string
-
-Character. Documentation string
+Character. Complete documentation string
 }
 \description{
-Extract Function Documentation from File (Fixed)
-
-Extract Function Documentation from File
+Extract Function Documentation (WITH WARNINGS)
 }

@@ -2,14 +2,14 @@
 % Please edit documentation in R/documentation_functions.r
 \name{add_custom_examples}
 \alias{add_custom_examples}
-\title{Add Custom Examples to Functions}
+\title{Add Custom Examples to Functions (PRESERVE EXISTING DOCS)}
 \usage{
 add_custom_examples(
   package_data,
   example_template,
   functions = NULL,
   save_to_files = FALSE,
-  backup = TRUE,
+  backup = FALSE,
   exported_only = TRUE
 )
 }
@@ -18,11 +18,11 @@ add_custom_examples(
 
 \item{example_template}{Character. Custom example template with \link{FUNCNAME} placeholder}
 
-\item{functions}{Character vector. Specific functions to update (optional, defaults to all needing examples)}
+\item{functions}{Character vector. Specific functions to update (optional)}
 
 \item{save_to_files}{Logical. Whether to save changes to files (default: FALSE)}
 
-\item{backup}{Logical. Create backups when saving (default: TRUE)}
+\item{backup}{Logical. Create backups when saving (default: FALSE)}
 
 \item{exported_only}{Logical. Only update exported functions (default: TRUE)}
 }
@@ -30,21 +30,5 @@ add_custom_examples(
 List with update results
 }
 \description{
-Adds or replaces examples in function documentation using a custom template.
-}
-\examples{
-\dontrun{
-# Define custom template
-template <- "dhsData <- getDHSdata(country = \"Zambia\", indicator = \"[FUNCNAME]\", year = 2018)"
-
-# Add examples to all functions needing them
-pkg_info <- analyze_package()
-result <- add_custom_examples(pkg_info, template, save_to_files = TRUE)
-
-# Add examples to specific functions only
-result <- add_custom_examples(pkg_info, template, 
-                             functions = c("func1", "func2"),
-                             save_to_files = TRUE)
-}
-
+Adds or replaces ONLY the examples section, preserving all existing documentation
 }

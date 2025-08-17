@@ -2,24 +2,24 @@
 % Please edit documentation in R/documentation_functions.r
 \name{bulk_examples_update}
 \alias{bulk_examples_update}
-\title{Bulk Examples Update with Custom Template}
+\title{Bulk Examples Update with Custom Template (PRESERVE EXISTING DOCS)}
 \usage{
 bulk_examples_update(
   package_path = ".",
   example_template,
   save_to_files = TRUE,
-  backup = TRUE,
+  backup = FALSE,
   exported_only = TRUE
 )
 }
 \arguments{
-\item{package_path}{Character. Package directory path (default: ".")}
+\item{package_path}{Character. Package directory path}
 
 \item{example_template}{Character. Custom example template with \link{FUNCNAME} placeholder}
 
 \item{save_to_files}{Logical. Whether to save changes to files (default: TRUE)}
 
-\item{backup}{Logical. Create backups (default: TRUE)}
+\item{backup}{Logical. Create backups (default: FALSE)}
 
 \item{exported_only}{Logical. Only update exported functions (default: TRUE)}
 }
@@ -27,19 +27,5 @@ bulk_examples_update(
 List with comprehensive results
 }
 \description{
-Convenience function to detect and update all functions needing examples.
-}
-\examples{
-\dontrun{
-# Define your custom template
-template <- "dhsData <- getDHSdata(country = \"Zambia\", indicator = \"[FUNCNAME]\", year = 2018)"
-
-# Update all functions that need examples
-result <- bulk_examples_update(".", template, save_to_files = TRUE)
-
-# Check results
-cat(result$summary)
-print(result$updated_functions)
-}
-
+Bulk Examples Update with Custom Template (PRESERVE EXISTING DOCS)
 }

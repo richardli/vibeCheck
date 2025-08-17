@@ -2,30 +2,18 @@
 % Please edit documentation in R/documentation_functions.r
 \name{detect_missing_examples}
 \alias{detect_missing_examples}
-\title{Detect Missing or Empty Examples (UPDATED VERSION)}
+\title{Detect Missing or Empty Examples (FIXED VERSION)}
 \usage{
 detect_missing_examples(package_data, check_empty_dontrun = TRUE)
 }
 \arguments{
 \item{package_data}{List. Result from analyze_package()}
 
-\item{check_empty_dontrun}{Logical. Whether to flag empty \\dontrun{} blocks (default: TRUE)}
+\item{check_empty_dontrun}{Logical. Whether to flag empty \\dontrun{} blocks}
 }
 \value{
 List with information about missing examples
 }
 \description{
-Analyzes existing documentation to find functions with missing or empty examples.
-Updated to use the fixed logic.
-}
-\examples{
-\dontrun{
-pkg_info <- analyze_package()
-missing_examples <- detect_missing_examples(pkg_info)
-
-# Check results
-print(missing_examples$functions_needing_examples)
-cat(missing_examples$summary)
-}
-
+Detect Missing or Empty Examples (FIXED VERSION)
 }
