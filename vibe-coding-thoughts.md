@@ -1,4 +1,4 @@
-## Vibe-coding an R package: fun until it's not
+## Vibe-coding an R package 
 
 This was my first vibe-coding project: forcing myself to code only through prompts, without diving into function details even when I knew how to fix them. It ended up taking a good portion of small pocket time across four days... Why am I doing this? I’m sure vibe-coding is picking up steam among professional programmers, but for students in statistics and data science, there isn’t much guidance out there. Definitely no textbook :) So I figured why not. I can’t judge it unless I seriously try it, so here it goes.
 
