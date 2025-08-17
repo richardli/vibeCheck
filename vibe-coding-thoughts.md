@@ -2,6 +2,8 @@
 
 This was my first vibe-coding project: forcing myself to code only through prompts, without diving into function details even when I knew how to fix them. It ended up taking a good portion of small pocket time across four days... Why am I doing this? I’m sure vibe-coding is picking up steam among professional programmers, but for students in statistics and data science, there isn’t much guidance out there. Definitely no textbook :) So I figured why not. I can’t judge it unless I seriously try it, so here it goes.
 
+TL;DR: it worked. But I deliberately tried a process not fit for vibe-coding, and it indeed failed the bigger task. What I am going to tell students? Use AI to help you code, definitely, but don't do it blindly.
+
 I used Claude Sonnet 4 as my coding partner. A vibe choice, for sure. Other LLMs may behave differently, but broadly speaking, the experience would be similar. My task was simple: clean up an R package our group had been building fast without careful documentation. I already knew how to get the job done, either hours of boring copy-pasting or a regex-heavy bash script. Instead, I thought: why not make an R package that helps me clean up R packages?
 
 In the pre-AI dark era, this may be something that's perfect for a student project (poor soul!). It could be a useful project, and could be a good learning experience for students. But it's not a great project since it's very software engineering focused, and not super useful for stat/DS students. (Note: whether it's actually useful is debatable, but I guess not useful in terms of the conventional criterion we use to evaluate stats/DS students.)  
